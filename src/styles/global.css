@@ -1,12 +1,27 @@
 :root {
   color-scheme: light;
   font-family: "Pretendard", "Noto Sans KR", sans-serif;
-  background: #f6f8fb;
-  color: #1f2937;
+  --panda-ink: #141414;
+  --panda-paper: #f6f7f5;
+  --panda-bamboo: #2f7f54;
+  --panda-bamboo-soft: #e8f4ec;
+  --panda-line: #dfe3dd;
+  --panda-surface: #ffffff;
+  --panda-danger-bg: #ffeceb;
+  --panda-danger-fg: #9f2222;
+  background: var(--panda-paper);
+  color: var(--panda-ink);
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
 }
 
 html {
@@ -15,8 +30,11 @@ html {
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #eef5ff 0%, #f7fbff 40%, #ffffff 100%);
   min-height: 100dvh;
+  background:
+    radial-gradient(circle at 15% 10%, #f1f7f1 0%, transparent 36%),
+    radial-gradient(circle at 85% 100%, #e6efe9 0%, transparent 42%),
+    linear-gradient(180deg, #f8faf7 0%, #f4f6f2 100%);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }

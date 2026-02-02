@@ -1,4 +1,4 @@
-export function loadNaverMapScript(clientId) {
+﻿export function loadNaverMapScript(clientId) {
   return new Promise((resolve, reject) => {
     if (!clientId) {
       reject(new Error("네이버 지도 API 키가 설정되지 않았습니다."));

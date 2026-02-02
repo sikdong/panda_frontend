@@ -11,7 +11,7 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody.message ?? "요청 처리에 실패했습니다.";
+    const message = errorBody.message ?? "Request failed.";
     const error = new Error(message);
     error.details = errorBody;
     throw error;
