@@ -20,7 +20,7 @@
     const script = document.createElement("script");
     script.id = "naver-map-sdk";
     script.async = true;
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
     script.onload = () => resolve(window.naver.maps);
     script.onerror = () => reject(new Error("네이버 지도 스크립트 로드에 실패했습니다."));
     document.head.appendChild(script);

@@ -31,6 +31,7 @@ const DEFAULT_FORM = {
 
 export default function CreateListingPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [imageFiles, setImageFiles] = useState([]);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +50,10 @@ export default function CreateListingPage() {
         ? [...prev.loanProducts, value]
         : prev.loanProducts.filter((product) => product !== value)
     }));
+  };
+
+  const onImageFilesChange = (event) => {
+    setImageFiles(Array.from(event.target.files ?? []));
   };
 
   const onSubmit = async (event) => {
@@ -73,18 +78,27 @@ export default function CreateListingPage() {
     setStatus({ type: "idle", message: "" });
 
     try {
-      await createListing({
+      const listingPayload = {
         ...form,
-        // Backward compatibility for APIs that still expect a single value.
-        loanProduct: form.loanProducts[0],
         address: form.address.trim(),
         note: form.note.trim(),
         moveInDate: form.moveInDate.replaceAll("-", ""),
         deposit: Number(form.deposit),
         monthlyRent: Number(form.monthlyRent)
-      });
+      };
+
+      if (imageFiles.length > 0) {
+        const formData = new FormData();
+        formData.append("listing", new Blob([JSON.stringify(listingPayload)], { type: "application/json" }));
+        imageFiles.forEach((file) => formData.append("images", file));
+        await createListing(formData);
+      } else {
+        await createListing(listingPayload);
+      }
+
       setStatus({ type: "success", message: "매물을 등록했습니다." });
       setForm(DEFAULT_FORM);
+      setImageFiles([]);
     } catch (error) {
       const errorType = error.details?.errorType;
       if (errorType === "INPUT_ERROR") {
@@ -161,7 +175,7 @@ export default function CreateListingPage() {
         </label>
 
         <fieldset style={{ border: "1px solid #ddd", borderRadius: "8px", padding: "12px", gridColumn: "1 / -1" }}>
-          <legend>대출상품 (중복 선택 가능)</legend>
+          <legend>대출상품</legend>
           <div style={{ display: "flex", flexWrap: "nowrap", gap: "10px 16px", overflowX: "auto", whiteSpace: "nowrap" }}>
             {LOAN_PRODUCTS.map((product) => (
               <label key={product.value} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -193,6 +207,16 @@ export default function CreateListingPage() {
         <label>
           월세
           <input name="monthlyRent" type="number" min="0" value={form.monthlyRent} onChange={onChange} required />
+        </label>
+
+        <label style={{ gridColumn: "1 / -1" }}>
+          이미지 파일 (여러 개 선택 가능)
+          <input type="file" accept="image/*" multiple onChange={onImageFilesChange} />
+          {imageFiles.length > 0 && (
+            <span style={{ marginTop: "6px", fontSize: "12px", color: "#4b5a52" }}>
+              {imageFiles.length}개 선택됨: {imageFiles.map((file) => file.name).join(", ")}
+            </span>
+          )}
         </label>
 
         <button type="submit" disabled={loading}>

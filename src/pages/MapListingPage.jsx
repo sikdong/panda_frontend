@@ -151,7 +151,6 @@ export default function MapListingPage() {
       <div ref={mapRef} className="map-canvas" />
 
       <div className="map-overlay-stack top-left">
-        <div className="map-overlay-card brand">판다 홈 맵</div>
         <div className="map-overlay-card">매물 {hasCoordinates.length}건</div>
         {!NAVER_MAP_CLIENT_ID && <div className="map-overlay-card error">VITE_NAVER_MAP_CLIENT_ID를 설정해주세요.</div>}
       </div>

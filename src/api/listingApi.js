@@ -1,11 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:9111";
 
 async function request(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {})
-    },
+    headers: isFormData
+      ? { ...(options.headers ?? {}) }
+      : {
+          "Content-Type": "application/json",
+          ...(options.headers ?? {})
+        },
     ...options
   });
 
@@ -27,7 +30,7 @@ async function request(path, options = {}) {
 export function createListing(payload) {
   return request("/api/listings", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: payload instanceof FormData ? payload : JSON.stringify(payload)
   });
 }
 
