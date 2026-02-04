@@ -15,6 +15,15 @@ const LOAN_PRODUCTS = [
   { value: "K_BANK", label: "케이뱅크 대출" }
 ];
 
+function formatMoneyInput(value) {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  return digitsOnly ? Number(digitsOnly).toLocaleString("ko-KR") : "";
+}
+
+function parseMoneyValue(value) {
+  return Number(String(value ?? "").replace(/,/g, ""));
+}
+
 const DEFAULT_FORM = {
   address: "",
   note: "",
@@ -42,6 +51,11 @@ export default function CreateListingPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const onMoneyChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: formatMoneyInput(value) }));
+  };
+
   const onLoanProductChange = (event) => {
     const { value, checked } = event.target;
     setForm((prev) => ({
@@ -64,11 +78,6 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (!isValidDate) {
-      setStatus({ type: "error", message: "입주 가능일을 선택해주세요." });
-      return;
-    }
-
     if (form.loanProducts.length === 0) {
       setStatus({ type: "error", message: "대출상품을 최소 1개 이상 선택해주세요." });
       return;
@@ -83,8 +92,8 @@ export default function CreateListingPage() {
         address: form.address.trim(),
         note: form.note.trim(),
         moveInDate: form.moveInDate.replaceAll("-", ""),
-        deposit: Number(form.deposit),
-        monthlyRent: Number(form.monthlyRent)
+        deposit: parseMoneyValue(form.deposit),
+        monthlyRent: parseMoneyValue(form.monthlyRent)
       };
 
       if (imageFiles.length > 0) {
@@ -115,7 +124,10 @@ export default function CreateListingPage() {
     <section className="panel">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "16px" }}>
         <h2>매물 등록</h2>
-        <Link to="/" className="link-button">목록으로 가기</Link>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Link to="/admin/listings" className="link-button">관리자 목록</Link>
+          <Link to="/" className="link-button">목록으로 가기</Link>
+        </div>
       </div>
       <form className="listing-form" onSubmit={onSubmit}>
         <label>
@@ -196,17 +208,17 @@ export default function CreateListingPage() {
 
         <label>
           입주 가능일
-          <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} required />
+          <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} />
         </label>
 
         <label>
           보증금
-          <input name="deposit" type="number" min="0" value={form.deposit} onChange={onChange} required />
+          <input name="deposit" type="text" inputMode="numeric" value={form.deposit} onChange={onMoneyChange} required />
         </label>
 
         <label>
           월세
-          <input name="monthlyRent" type="number" min="0" value={form.monthlyRent} onChange={onChange} required />
+          <input name="monthlyRent" type="text" inputMode="numeric" value={form.monthlyRent} onChange={onMoneyChange} required />
         </label>
 
         <label style={{ gridColumn: "1 / -1" }}>

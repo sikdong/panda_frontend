@@ -12,19 +12,29 @@ async function request(path, options = {}) {
     ...options
   });
 
+  const rawBody = await response.text();
+  let parsedBody = null;
+  if (rawBody) {
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      parsedBody = null;
+    }
+  }
+
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
+    const errorBody = parsedBody ?? {};
     const message = errorBody.message ?? "Request failed.";
     const error = new Error(message);
     error.details = errorBody;
     throw error;
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || !rawBody) {
     return null;
   }
 
-  return response.json();
+  return parsedBody;
 }
 
 export function createListing(payload) {
@@ -36,4 +46,23 @@ export function createListing(payload) {
 
 export function fetchListingSummaries() {
   return request("/api/listings/summaries");
+}
+
+export function fetchListingDetail(listingId) {
+  return request(`/api/listings/${listingId}`);
+}
+
+export function updateListingSoldStatus(listingId, completed) {
+  return request(`/api/listings/${listingId}/sold`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      sold: completed
+    })
+  });
+}
+
+export function deleteListing(listingId) {
+  return request(`/api/listings/${listingId}`, {
+    method: "DELETE"
+  });
 }
