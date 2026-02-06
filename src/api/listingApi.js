@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:9111";
+﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:9111";
 
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
@@ -48,6 +48,10 @@ export function fetchListingSummaries() {
   return request("/api/listings/summaries");
 }
 
+export function fetchUnsoldListings() {
+  return request("/api/listings/unsold");
+}
+
 export function fetchListingDetail(listingId) {
   return request(`/api/listings/${listingId}`);
 }
@@ -64,5 +68,12 @@ export function updateListingSoldStatus(listingId, completed) {
 export function deleteListing(listingId) {
   return request(`/api/listings/${listingId}`, {
     method: "DELETE"
+  });
+}
+
+export function updateListing(listingId, payload) {
+  return request(`/api/listings/${listingId}`, {
+    method: "PATCH",
+    body: payload instanceof FormData ? payload : JSON.stringify(payload)
   });
 }

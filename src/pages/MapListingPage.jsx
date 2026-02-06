@@ -1,66 +1,28 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchListingDetail, fetchListingSummaries } from "../api/listingApi";
+import { fetchListingDetail, fetchListingSummaries, fetchUnsoldListings } from "../api/listingApi";
 import { loadNaverMapScript } from "../components/naverMapLoader";
+import {
+  CONTRACT_TYPE_LABELS,
+  COORDINATE_GROUP_DECIMALS,
+  DETAIL_KEY_LABELS,
+  DETAIL_PRIORITY_KEYS,
+  ELEVATOR_LABELS,
+  INSURANCE_AVAILABLE_PRODUCTS,
+  LOAN_126_PRODUCTS,
+  LOAN_FILTER_OPTIONS,
+  LOAN_PRODUCT_LABELS,
+  PARKING_LABELS,
+  PET_LABELS,
+  ROOM_TYPE_LABELS,
+  ROOM_TYPE_OPTIONS,
+  SHEET_TRANSLATE
+} from "../constants/mapListingConstants";
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = {
   latitude: 37.5665,
   longitude: 126.978
-};
-const COORDINATE_GROUP_DECIMALS = 6;
-const LOAN_PRODUCT_LABELS = {
-  HF_YOUTH: "HF 청년",
-  HUG_YOUTH: "HUG 청년",
-  LH: "LH",
-  SH: "SH",
-  SEOUL_RENT_DEPOSIT: "서울시 전세보증금",
-  SEOUL_NEWLY_MARRIED: "서울시 신혼부부",
-  GENERAL_JEONSE: "일반 전세대출",
-  KAKAO_BANK: "카카오 대출",
-  TOSS_BANK: "토스 대출",
-  K_BANK: "케이뱅크 대출"
-};
-const DETAIL_KEY_LABELS = {
-  id: "매물 ID",
-  listingId: "매물 ID",
-  address: "주소",
-  note: "비고",
-  parking: "주차",
-  elevator: "엘리베이터",
-  pet: "반려동물",
-  contractType: "계약 형태",
-  roomType: "방 구조",
-  loanProducts: "대출 유형",
-  moveInDate: "입주 가능일",
-  deposit: "보증금",
-  monthlyRent: "월세",
-  createdAt: "등록일시",
-  updatedAt: "수정일시"
-};
-const PARKING_LABELS = {
-  AVAILABLE: "가능",
-  UNAVAILABLE: "불가",
-  CHECK_REQUIRED: "확인 필요"
-};
-const ELEVATOR_LABELS = {
-  YES: "있음",
-  NO: "없음"
-};
-const PET_LABELS = {
-  AVAILABLE: "가능",
-  UNAVAILABLE: "불가",
-  CHECK_REQUIRED: "확인 필요"
-};
-const CONTRACT_TYPE_LABELS = {
-  JEONSE: "전세",
-  SEMI_JEONSE: "반전세",
-  MONTHLY_RENT: "월세"
-};
-const SHEET_TRANSLATE = {
-  closed: 100,
-  half: 46,
-  full: 0
 };
 
 function formatNumber(value) {
@@ -68,14 +30,7 @@ function formatNumber(value) {
 }
 
 function formatRoomType(value) {
-  const labels = {
-    ONE_ROOM: "원룸",
-    ONE_POINT_FIVE_ROOM: "1.5룸",
-    TWO_ROOM: "투룸",
-    THREE_ROOM: "3룸",
-    OTHER: "기타"
-  };
-  return labels[value] ?? value ?? "방 구조 정보 없음";
+  return ROOM_TYPE_LABELS[value] ?? value ?? "방 구조 정보 없음";
 }
 
 function formatLoanProducts(value) {
@@ -190,6 +145,46 @@ function formatDetailValue(key, value) {
   return String(value);
 }
 
+function sortDetailEntries(detail) {
+  if (!detail || typeof detail !== "object") {
+    return [];
+  }
+
+  return Object.entries(detail)
+    .filter(([key]) => key !== "imagePaths")
+    .sort(([a], [b]) => {
+      const aPriority = DETAIL_PRIORITY_KEYS.indexOf(a);
+      const bPriority = DETAIL_PRIORITY_KEYS.indexOf(b);
+      const aRank = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
+      const bRank = bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority;
+
+      if (aRank !== bRank) {
+        return aRank - bRank;
+      }
+      return 0;
+    });
+}
+
+function matchesLoanFilter(loanProducts, loanFilter) {
+  if (loanFilter === "ALL") {
+    return true;
+  }
+
+  if (!Array.isArray(loanProducts) || loanProducts.length === 0) {
+    return false;
+  }
+
+  if (loanFilter === "TYPE_126") {
+    return loanProducts.some((product) => LOAN_126_PRODUCTS.has(product));
+  }
+
+  if (loanFilter === "INSURANCE_AVAILABLE") {
+    return loanProducts.some((product) => INSURANCE_AVAILABLE_PRODUCTS.has(product));
+  }
+
+  return true;
+}
+
 export default function MapListingPage() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -203,6 +198,10 @@ export default function MapListingPage() {
   const [sheetMode, setSheetMode] = useState("closed");
   const [sheetDragOffset, setSheetDragOffset] = useState(0);
   const [isSheetDragging, setIsSheetDragging] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [regionQuery, setRegionQuery] = useState("");
+  const [selectedRoomType, setSelectedRoomType] = useState("ALL");
+  const [selectedLoanFilter, setSelectedLoanFilter] = useState("ALL");
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -215,9 +214,21 @@ export default function MapListingPage() {
   const dragPointerIdRef = useRef(null);
   const dragStartYRef = useRef(0);
 
+  const filteredListings = useMemo(() => {
+    const normalizedRegion = regionQuery.trim().toLowerCase();
+
+    return listings.filter((listing) => {
+      const address = String(listing?.address ?? "").toLowerCase();
+      const regionMatched = !normalizedRegion || address.includes(normalizedRegion);
+      const roomMatched = selectedRoomType === "ALL" || listing?.roomType === selectedRoomType;
+      const loanMatched = matchesLoanFilter(listing?.loanProducts, selectedLoanFilter);
+      return regionMatched && roomMatched && loanMatched;
+    });
+  }, [listings, regionQuery, selectedRoomType, selectedLoanFilter]);
+
   const hasCoordinates = useMemo(
-    () => listings.filter((item) => item.latitude != null && item.longitude != null),
-    [listings]
+    () => filteredListings.filter((item) => item.latitude != null && item.longitude != null),
+    [filteredListings]
   );
 
   const groupedCoordinates = useMemo(() => {
@@ -252,6 +263,7 @@ export default function MapListingPage() {
     }));
   }, [hasCoordinates]);
   const detailImageUrls = useMemo(() => extractImageUrls(selectedListingDetail), [selectedListingDetail]);
+  const detailEntries = useMemo(() => sortDetailEntries(selectedListingDetail), [selectedListingDetail]);
   const currentPhotoUrl = detailImageUrls[photoIndex] ?? "";
 
   const closeDetails = () => {
@@ -399,7 +411,7 @@ export default function MapListingPage() {
 
     (async () => {
       try {
-        const data = await fetchListingSummaries();
+        const data = await fetchUnsoldListings();
         if (mounted) {
           setListings(data ?? []);
         }
@@ -524,13 +536,28 @@ export default function MapListingPage() {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
+        if (isFilterOpen) {
+          setIsFilterOpen(false);
+          return;
+        }
         closeDetails();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!selectedListingId) {
+      return;
+    }
+
+    const existsInFiltered = filteredListings.some((listing) => getListingId(listing) === selectedListingId);
+    if (!existsInFiltered) {
+      closeDetails();
+    }
+  }, [filteredListings, selectedListingId]);
 
   const onSheetPointerDown = (event) => {
     if (!isMobileView || !selectedListingId) {
@@ -583,6 +610,12 @@ export default function MapListingPage() {
     setIsPhotoViewerOpen(false);
   };
 
+  const resetFilters = () => {
+    setRegionQuery("");
+    setSelectedRoomType("ALL");
+    setSelectedLoanFilter("ALL");
+  };
+
   const showPrevPhoto = () => {
     if (detailImageUrls.length <= 1) {
       return;
@@ -622,6 +655,7 @@ export default function MapListingPage() {
       <div className="map-overlay-stack top-left">
         <div className="map-overlay-card">매물 {hasCoordinates.length}건</div>
         <Link to="/lss" className="link-button">등록</Link>
+        <button type="button" className="link-button" onClick={() => setIsFilterOpen(true)}>필터</button>
         {!NAVER_MAP_CLIENT_ID && <div className="map-overlay-card error">VITE_NAVER_MAP_CLIENT_ID를 설정해주세요.</div>}
       </div>
 
@@ -646,9 +680,7 @@ export default function MapListingPage() {
 
           {!detailLoading && !detailError && selectedListingDetail && (
             <div className="map-detail-body">
-              {Object.entries(selectedListingDetail)
-                .filter(([key]) => key !== "imagePaths")
-                .map(([key, value]) => (
+              {detailEntries.map(([key, value]) => (
                 <div key={key}>
                   <strong>{formatDetailKey(key)}:</strong>{" "}
                   <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -710,9 +742,7 @@ export default function MapListingPage() {
 
                 {!detailLoading && !detailError && selectedListingDetail && (
                   <div className="map-detail-body">
-                    {Object.entries(selectedListingDetail)
-                      .filter(([key]) => key !== "imagePaths")
-                      .map(([key, value]) => (
+                    {detailEntries.map(([key, value]) => (
                       <div key={key}>
                         <strong>{formatDetailKey(key)}:</strong>{" "}
                         <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -741,6 +771,62 @@ export default function MapListingPage() {
           </div>
         </div>
       )}
+
+      {isFilterOpen && (
+        <div className="filter-viewer-backdrop" onClick={() => setIsFilterOpen(false)}>
+          <section className="filter-viewer-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="filter-viewer-head">
+              <strong>필터</strong>
+              <button type="button" onClick={() => setIsFilterOpen(false)} aria-label="필터 닫기">×</button>
+            </div>
+
+            <div className="filter-viewer-body">
+              <label className="filter-field">
+                <span>지역</span>
+                <input
+                  type="text"
+                  value={regionQuery}
+                  onChange={(event) => setRegionQuery(event.target.value)}
+                  placeholder="주소에서 검색"
+                />
+              </label>
+
+              <label className="filter-field">
+                <span>방 타입</span>
+                <select value={selectedRoomType} onChange={(event) => setSelectedRoomType(event.target.value)}>
+                  {ROOM_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="filter-field">
+                <span>대출 타입</span>
+                <select value={selectedLoanFilter} onChange={(event) => setSelectedLoanFilter(event.target.value)}>
+                  {LOAN_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="filter-viewer-actions">
+              <button type="button" onClick={resetFilters}>초기화</button>
+              <button type="button" onClick={() => setIsFilterOpen(false)}>적용</button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
+
+
+
+
+
+

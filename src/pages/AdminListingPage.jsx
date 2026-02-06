@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { deleteListing, fetchListingSummaries, updateListingSoldStatus } from "../api/listingApi";
 
@@ -10,8 +10,13 @@ function getSoldValue(listing) {
   return Boolean(listing?.isSold ?? listing?.sold ?? listing?.saleCompleted ?? false);
 }
 
+function normalize(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export default function AdminListingPage() {
   const [listings, setListings] = useState([]);
+  const [addressQuery, setAddressQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [busyIds, setBusyIds] = useState([]);
@@ -97,20 +102,37 @@ export default function AdminListingPage() {
     }
   };
 
+  const filteredListings = useMemo(() => {
+    const query = normalize(addressQuery);
+    if (!query) {
+      return listings;
+    }
+    return listings.filter((listing) => normalize(listing?.address).includes(query));
+  }, [addressQuery, listings]);
+
   return (
     <section className="panel">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>관리자 매물 목록</h2>
         <Link to="/" className="link-button">지도로 가기</Link>
       </div>
+      <input
+        type="text"
+        value={addressQuery}
+        onChange={(event) => setAddressQuery(event.target.value)}
+        placeholder="주소 검색"
+        aria-label="주소 검색"
+        style={{ width: "100%", minHeight: 40, marginBottom: 16, border: "1px solid #d7deda", borderRadius: 8, padding: "0 10px" }}
+      />
 
       {loading && <p>목록을 불러오는 중...</p>}
       {!loading && errorMessage && <p className="status error">오류: {errorMessage}</p>}
       {!loading && !errorMessage && listings.length === 0 && <p>등록된 매물이 없습니다.</p>}
+      {!loading && !errorMessage && listings.length > 0 && filteredListings.length === 0 && <p>검색 결과가 없습니다.</p>}
 
-      {!loading && !errorMessage && listings.length > 0 && (
+      {!loading && !errorMessage && filteredListings.length > 0 && (
         <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 10 }}>
-          {listings.map((listing, index) => {
+          {filteredListings.map((listing, index) => {
             const listingId = getListingId(listing);
             const busy = listingId ? busyIds.includes(listingId) : false;
             const completed = getSoldValue(listing);
@@ -134,8 +156,9 @@ export default function AdminListingPage() {
                       fontWeight: 700
                     }}
                   >
-                    {completed ? "판매완료 해제" : "판매완료"}
+                    {completed ? "거래완료 해제" : "거래완료"}
                   </button>
+                  <Link to={`/lss/${listingId}`} className="link-button" style={{ minHeight: 34, padding: "0 10px", fontWeight : 400 }}>수정</Link>
                   <button
                     type="button"
                     onClick={() => onDelete(listing)}
@@ -153,3 +176,5 @@ export default function AdminListingPage() {
     </section>
   );
 }
+
+

@@ -1,4 +1,4 @@
-.app-shell {
+﻿.app-shell {
   width: 100%;
   min-height: 100dvh;
 }
@@ -269,8 +269,8 @@
 
 .photo-viewer-modal {
   position: relative;
-  width: min(1000px, calc(300vw - 32px));
-  max-height: min(1300vh, 1300px);
+  width: min(1280px, calc(100vw - 32px));
+  max-height: min(92dvh, 980px);
   background: #111;
   border-radius: 14px;
   padding: 16px 16px 12px;
@@ -295,7 +295,7 @@
 
 .photo-viewer-image {
   width: 100%;
-  max-height: min(68dvh, 700px);
+  max-height: min(82dvh, 900px);
   object-fit: contain;
   border-radius: 10px;
   background: #0a0a0a;
@@ -317,6 +317,84 @@
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   padding: 0 12px;
+  cursor: pointer;
+}
+.filter-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(0, 0, 0, 0.42);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.filter-viewer-modal {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(86dvh, 760px);
+  border-radius: 14px;
+  border: 1px solid #d9e3dc;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(16, 24, 20, 0.25);
+  padding: 14px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+}
+
+.filter-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-viewer-head button {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid #ced9d2;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.filter-viewer-body {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+}
+
+.filter-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2421;
+}
+
+.filter-field input,
+.filter-field select {
+  min-height: 40px;
+  border: 1px solid #cfd9d3;
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.filter-viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.filter-viewer-actions button {
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid #cdd7d1;
+  background: #ffffff;
+  padding: 0 12px;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -439,4 +517,23 @@
   .map-side-panel {
     display: none;
   }
+
+  .filter-viewer-backdrop {
+    padding: 0;
+  }
+
+  .filter-viewer-modal {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+    padding: 16px 14px;
+  }
+
+  .filter-viewer-body {
+    align-content: start;
+  }
 }
+
+
