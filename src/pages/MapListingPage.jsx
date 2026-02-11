@@ -115,7 +115,7 @@ function formatDetailKey(key) {
 }
 
 function formatDetailValue(key, value) {
-  if (key === "deposit" || key === "monthlyRent") {
+  if (key === "deposit" || key === "monthlyRent" || key === "viewCount") {
     return formatNumber(value);
   }
   if (key === "loanProducts") {
@@ -151,7 +151,7 @@ function sortDetailEntries(detail) {
   }
 
   return Object.entries(detail)
-    .filter(([key]) => key !== "imagePaths")
+    .filter(([key]) => key !== "imagePaths" && key !== "imageFilePaths")
     .sort(([a], [b]) => {
       const aPriority = DETAIL_PRIORITY_KEYS.indexOf(a);
       const bPriority = DETAIL_PRIORITY_KEYS.indexOf(b);
@@ -366,6 +366,7 @@ export default function MapListingPage() {
         <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
         <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
         <div>방 구조: ${formatRoomType(listing.roomType)}</div>
+        <div>조회수: ${formatNumber(listing.viewCount)}</div>
         <div style="margin-top:4px; color:#2a7c4f; font-weight:700;">상세 보기</div>
       `;
 
@@ -824,9 +825,5 @@ export default function MapListingPage() {
     </section>
   );
 }
-
-
-
-
 
 

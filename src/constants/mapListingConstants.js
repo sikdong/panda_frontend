@@ -51,6 +51,7 @@ export const INSURANCE_AVAILABLE_PRODUCTS = new Set(["CASH", "HF_YOUTH"]);
 export const DETAIL_KEY_LABELS = {
   id: "매물 ID",
   listingId: "매물 ID",
+  viewCount: "조회수",
   address: "주소",
   note: "비고",
   parking: "주차",
@@ -89,11 +90,10 @@ export const CONTRACT_TYPE_LABELS = {
   MONTHLY_RENT: "월세"
 };
 
-export const DETAIL_PRIORITY_KEYS = ["address", "deposit", "monthlyRent", "roomType"];
+export const DETAIL_PRIORITY_KEYS = ["address", "deposit", "monthlyRent", "viewCount", "roomType"];
 
 export const SHEET_TRANSLATE = {
   closed: 100,
   half: 46,
   full: 0
 };
-
