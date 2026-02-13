@@ -7,7 +7,10 @@ import "./styles/layout.css";
 export default function App() {
   return (
     <div className="app-shell">
-      <h4 style={{ marginLeft: 20}}>판다 부동산 매물 조회</h4>
+      <div className="app-title">
+         <img src="/panda_title.png" alt="판다 부동산 로고" />
+         <h4>매물 조회</h4>
+      </div>
       <Routes>
         <Route path="/" element={<MapListingPage />} />
         <Route path="/lss" element={<CreateListingPage />} />

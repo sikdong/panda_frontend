@@ -10,7 +10,8 @@ export const LOAN_PRODUCT_LABELS = {
   GENERAL_JEONSE: "일반 전세대출",
   KAKAO_BANK: "카카오 대출",
   TOSS_BANK: "토스 대출",
-  K_BANK: "케이뱅크 대출"
+  K_BANK: "케이뱅크 대출",
+  CASH: "현금",
 };
 
 export const ROOM_TYPE_LABELS = {

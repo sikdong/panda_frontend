@@ -185,10 +185,19 @@ function matchesLoanFilter(loanProducts, loanFilter) {
   return true;
 }
 
+function matchesListingFilters(listing, normalizedRegion, selectedRoomType, selectedLoanFilter) {
+  const address = String(listing?.address ?? "").toLowerCase();
+  const regionMatched = !normalizedRegion || address.includes(normalizedRegion);
+  const roomMatched = selectedRoomType === "ALL" || listing?.roomType === selectedRoomType;
+  const loanMatched = matchesLoanFilter(listing?.loanProducts, selectedLoanFilter);
+  return regionMatched && roomMatched && loanMatched;
+}
+
 export default function MapListingPage() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [mapReady, setMapReady] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
   const [selectedListingId, setSelectedListingId] = useState(null);
@@ -202,6 +211,9 @@ export default function MapListingPage() {
   const [regionQuery, setRegionQuery] = useState("");
   const [selectedRoomType, setSelectedRoomType] = useState("ALL");
   const [selectedLoanFilter, setSelectedLoanFilter] = useState("ALL");
+  const [draftRegionQuery, setDraftRegionQuery] = useState("");
+  const [draftRoomType, setDraftRoomType] = useState("ALL");
+  const [draftLoanFilter, setDraftLoanFilter] = useState("ALL");
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -216,14 +228,9 @@ export default function MapListingPage() {
 
   const filteredListings = useMemo(() => {
     const normalizedRegion = regionQuery.trim().toLowerCase();
-
-    return listings.filter((listing) => {
-      const address = String(listing?.address ?? "").toLowerCase();
-      const regionMatched = !normalizedRegion || address.includes(normalizedRegion);
-      const roomMatched = selectedRoomType === "ALL" || listing?.roomType === selectedRoomType;
-      const loanMatched = matchesLoanFilter(listing?.loanProducts, selectedLoanFilter);
-      return regionMatched && roomMatched && loanMatched;
-    });
+    return listings.filter((listing) =>
+      matchesListingFilters(listing, normalizedRegion, selectedRoomType, selectedLoanFilter)
+    );
   }, [listings, regionQuery, selectedRoomType, selectedLoanFilter]);
 
   const hasCoordinates = useMemo(
@@ -457,28 +464,12 @@ export default function MapListingPage() {
         });
 
         mapInstanceRef.current = map;
+        setMapReady(true);
         infoWindowRef.current = new naverMaps.InfoWindow({
           borderWidth: 0,
           backgroundColor: "transparent",
           disableAnchor: true,
           pixelOffset: new naverMaps.Point(0, -12)
-        });
-
-        markersRef.current = groupedCoordinates.map((group) => {
-          const marker = new naverMaps.Marker({
-            map,
-            position: new naverMaps.LatLng(group.latitude, group.longitude),
-            icon: {
-              content: createMarkerIconContent(group.count, false),
-              anchor: new naverMaps.Point(16, 16)
-            }
-          });
-
-          naverMaps.Event.addListener(marker, "click", () => {
-            handleMarkerSelect(group, map, marker);
-          });
-
-          return { key: group.key, count: group.count, marker };
         });
       } catch (error) {
         if (!isCancelled) {
@@ -494,8 +485,41 @@ export default function MapListingPage() {
       infoWindowRef.current?.close();
       infoWindowRef.current = null;
       mapInstanceRef.current = null;
+      setMapReady(false);
     };
-  }, [loading, errorMessage, groupedCoordinates]);
+  }, [loading, errorMessage]);
+
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current || !naverMapsRef.current) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+
+    markersRef.current.forEach(({ marker }) => marker.setMap(null));
+    markersRef.current = groupedCoordinates.map((group) => {
+      const marker = new naverMaps.Marker({
+        map,
+        position: new naverMaps.LatLng(group.latitude, group.longitude),
+        icon: {
+          content: createMarkerIconContent(group.count, false),
+          anchor: new naverMaps.Point(16, 16)
+        }
+      });
+
+      naverMaps.Event.addListener(marker, "click", () => {
+        handleMarkerSelect(group, map, marker);
+      });
+
+      return { key: group.key, count: group.count, marker };
+    });
+
+    if (selectedGroupKey && !groupedCoordinates.some((group) => group.key === selectedGroupKey)) {
+      setSelectedGroupKey(null);
+      infoWindowRef.current?.close();
+    }
+  }, [groupedCoordinates, mapReady]);
 
   useEffect(() => {
     if (!selectedListingId && isMobileView) {
@@ -612,9 +636,48 @@ export default function MapListingPage() {
   };
 
   const resetFilters = () => {
-    setRegionQuery("");
-    setSelectedRoomType("ALL");
-    setSelectedLoanFilter("ALL");
+    setDraftRegionQuery("");
+    setDraftRoomType("ALL");
+    setDraftLoanFilter("ALL");
+  };
+
+  const openFilter = () => {
+    setDraftRegionQuery(regionQuery);
+    setDraftRoomType(selectedRoomType);
+    setDraftLoanFilter(selectedLoanFilter);
+    setIsFilterOpen(true);
+  };
+
+  const closeFilter = () => {
+    setIsFilterOpen(false);
+  };
+
+  const applyFilters = () => {
+    const nextRegionQuery = draftRegionQuery;
+    const nextRoomType = draftRoomType;
+    const nextLoanFilter = draftLoanFilter;
+    const normalizedRegion = nextRegionQuery.trim().toLowerCase();
+
+    setRegionQuery(nextRegionQuery);
+    setSelectedRoomType(nextRoomType);
+    setSelectedLoanFilter(nextLoanFilter);
+    setIsFilterOpen(false);
+
+    if (!mapInstanceRef.current || !naverMapsRef.current) {
+      return;
+    }
+
+    const firstMatched = listings
+      .filter((listing) => matchesListingFilters(listing, normalizedRegion, nextRoomType, nextLoanFilter))
+      .find((listing) => listing?.latitude != null && listing?.longitude != null);
+
+    if (!firstMatched) {
+      return;
+    }
+
+    mapInstanceRef.current.panTo(
+      new naverMapsRef.current.LatLng(Number(firstMatched.latitude), Number(firstMatched.longitude))
+    );
   };
 
   const showPrevPhoto = () => {
@@ -656,7 +719,7 @@ export default function MapListingPage() {
       <div className="map-overlay-stack top-left">
         <div className="map-overlay-card">매물 {hasCoordinates.length}건</div>
         <Link to="/lss" className="link-button">등록</Link>
-        <button type="button" className="link-button" onClick={() => setIsFilterOpen(true)}>필터</button>
+        <button type="button" className="link-button" onClick={openFilter}>필터</button>
         {!NAVER_MAP_CLIENT_ID && <div className="map-overlay-card error">VITE_NAVER_MAP_CLIENT_ID를 설정해주세요.</div>}
       </div>
 
@@ -774,11 +837,11 @@ export default function MapListingPage() {
       )}
 
       {isFilterOpen && (
-        <div className="filter-viewer-backdrop" onClick={() => setIsFilterOpen(false)}>
+        <div className="filter-viewer-backdrop" onClick={closeFilter}>
           <section className="filter-viewer-modal" onClick={(event) => event.stopPropagation()}>
             <div className="filter-viewer-head">
               <strong>필터</strong>
-              <button type="button" onClick={() => setIsFilterOpen(false)} aria-label="필터 닫기">×</button>
+              <button type="button" onClick={closeFilter} aria-label="필터 닫기">×</button>
             </div>
 
             <div className="filter-viewer-body">
@@ -786,15 +849,15 @@ export default function MapListingPage() {
                 <span>지역</span>
                 <input
                   type="text"
-                  value={regionQuery}
-                  onChange={(event) => setRegionQuery(event.target.value)}
+                  value={draftRegionQuery}
+                  onChange={(event) => setDraftRegionQuery(event.target.value)}
                   placeholder="주소에서 검색"
                 />
               </label>
 
               <label className="filter-field">
                 <span>방 타입</span>
-                <select value={selectedRoomType} onChange={(event) => setSelectedRoomType(event.target.value)}>
+                <select value={draftRoomType} onChange={(event) => setDraftRoomType(event.target.value)}>
                   {ROOM_TYPE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -805,7 +868,7 @@ export default function MapListingPage() {
 
               <label className="filter-field">
                 <span>대출 타입</span>
-                <select value={selectedLoanFilter} onChange={(event) => setSelectedLoanFilter(event.target.value)}>
+                <select value={draftLoanFilter} onChange={(event) => setDraftLoanFilter(event.target.value)}>
                   {LOAN_FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -817,7 +880,7 @@ export default function MapListingPage() {
 
             <div className="filter-viewer-actions">
               <button type="button" onClick={resetFilters}>초기화</button>
-              <button type="button" onClick={() => setIsFilterOpen(false)}>적용</button>
+              <button type="button" onClick={applyFilters}>적용</button>
             </div>
           </section>
         </div>
@@ -825,5 +888,3 @@ export default function MapListingPage() {
     </section>
   );
 }
-
-
