@@ -214,7 +214,6 @@ export default function MapListingPage() {
   const [draftRegionQuery, setDraftRegionQuery] = useState("");
   const [draftRoomType, setDraftRoomType] = useState("ALL");
   const [draftLoanFilter, setDraftLoanFilter] = useState("ALL");
-  const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
 
   const mapRef = useRef(null);
@@ -281,7 +280,6 @@ export default function MapListingPage() {
     setSheetMode("closed");
     setSheetDragOffset(0);
     setSelectedGroupKey(null);
-    setIsPhotoViewerOpen(false);
     setPhotoIndex(0);
   };
 
@@ -624,17 +622,6 @@ export default function MapListingPage() {
     setSheetMode(nextMode);
   };
 
-  const openPhotoViewer = () => {
-    if (detailImageUrls.length === 0) {
-      return;
-    }
-    setIsPhotoViewerOpen(true);
-  };
-
-  const closePhotoViewer = () => {
-    setIsPhotoViewerOpen(false);
-  };
-
   const resetFilters = () => {
     setDraftRegionQuery("");
     setDraftRoomType("ALL");
@@ -725,16 +712,22 @@ export default function MapListingPage() {
 
       {hasCoordinates.length === 0 && <div className="map-overlay-card empty">좌표가 있는 매물이 없습니다.</div>}
 
+      {!detailLoading && !detailError && selectedListingId && detailImageUrls.length > 0 && (
+        <div className={`map-top-photo-panel ${!isMobileView && selectedListingId ? "with-side-panel" : ""}`}>
+          <img src={currentPhotoUrl} alt={`매물 사진 ${photoIndex + 1}`} className="map-top-photo-image" />
+          <div className="map-top-photo-controls">
+            <button type="button" onClick={showPrevPhoto} disabled={detailImageUrls.length <= 1}>이전</button>
+            <span>{photoIndex + 1} / {detailImageUrls.length}</span>
+            <button type="button" onClick={showNextPhoto} disabled={detailImageUrls.length <= 1}>다음</button>
+          </div>
+        </div>
+      )}
+
       {!isMobileView && selectedListingId && (
         <aside className="map-side-panel open">
           <div className="map-detail-head">
             <strong>매물 상세</strong>
             <div className="map-sheet-actions">
-              {detailImageUrls.length > 0 && (
-                <button type="button" onClick={openPhotoViewer}>
-                  사진 보기 ({detailImageUrls.length})
-                </button>
-              )}
               <button type="button" onClick={closeDetails}>닫기</button>
             </div>
           </div>
@@ -789,11 +782,6 @@ export default function MapListingPage() {
                 <div className="map-detail-head">
                   <strong>매물 상세</strong>
                   <div className="map-sheet-actions">
-                    {detailImageUrls.length > 0 && (
-                      <button type="button" onClick={openPhotoViewer}>
-                        사진 보기 ({detailImageUrls.length})
-                      </button>
-                    )}
                     <button type="button" onClick={() => setSheetMode(sheetMode === "full" ? "half" : "full")}>
                       {sheetMode === "full" ? "접기" : "펼치기"}
                     </button>
@@ -820,20 +808,6 @@ export default function MapListingPage() {
             )}
           </section>
         </>
-      )}
-
-      {isPhotoViewerOpen && detailImageUrls.length > 0 && (
-        <div className="photo-viewer-backdrop" onClick={closePhotoViewer}>
-          <div className="photo-viewer-modal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="photo-viewer-close" onClick={closePhotoViewer} aria-label="사진 닫기">×</button>
-            <img src={currentPhotoUrl} alt={`매물 사진 ${photoIndex + 1}`} className="photo-viewer-image" />
-            <div className="photo-viewer-controls">
-              <button type="button" onClick={showPrevPhoto} disabled={detailImageUrls.length <= 1}>이전</button>
-              <span>{photoIndex + 1} / {detailImageUrls.length}</span>
-              <button type="button" onClick={showNextPhoto} disabled={detailImageUrls.length <= 1}>다음</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {isFilterOpen && (

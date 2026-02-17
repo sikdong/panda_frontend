@@ -160,6 +160,7 @@
   display: grid;
   align-content: start;
   gap: 10px;
+  overflow-y: auto;
 }
 
 .map-side-empty {
@@ -277,65 +278,50 @@
   gap: 6px;
 }
 
-.photo-viewer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: rgba(0, 0, 0, 0.55);
-  display: grid;
-  place-items: center;
-  padding: 16px;
-}
-
-.photo-viewer-modal {
-  position: relative;
-  width: min(1280px, calc(100vw - 32px));
-  max-height: min(92dvh, 980px);
-  background: #111;
-  border-radius: 14px;
-  padding: 16px 16px 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.photo-viewer-close {
+.map-top-photo-panel {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
+  top: calc(14px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 23;
+  width: min(640px, calc(100vw - 32px));
+  border: 1px solid #dce4de;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 12px 24px rgba(18, 24, 20, 0.16);
 }
 
-.photo-viewer-image {
+.map-top-photo-panel.with-side-panel {
+  left: calc((100% - 360px) / 2);
+  transform: translateX(-50%);
+}
+
+.map-top-photo-image {
   width: 100%;
-  max-height: min(82dvh, 900px);
+  aspect-ratio: 16 / 9;
   object-fit: contain;
   border-radius: 10px;
-  background: #0a0a0a;
+  background: #eef3ef;
 }
 
-.photo-viewer-controls {
+.map-top-photo-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #fff;
+  color: #1f2421;
   font-size: 13px;
 }
 
-.photo-viewer-controls button {
+.map-top-photo-controls button {
   min-height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid #cad3cd;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: #ffffff;
+  color: #1f2421;
   padding: 0 12px;
   cursor: pointer;
 }
@@ -549,6 +535,16 @@
   .map-overlay-card {
     padding: 8px 11px;
     font-size: 12px;
+  }
+
+  .map-top-photo-panel {
+    top: calc(10px + env(safe-area-inset-top));
+    left: 50%;
+    width: calc(100vw - 20px);
+  }
+
+  .map-top-photo-panel.with-side-panel {
+    left: 50%;
   }
 
   .map-page.with-side-panel .map-canvas {
