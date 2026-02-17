@@ -215,6 +215,7 @@ export default function MapListingPage() {
   const [draftRoomType, setDraftRoomType] = useState("ALL");
   const [draftLoanFilter, setDraftLoanFilter] = useState("ALL");
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [isTopPhotoVisible, setIsTopPhotoVisible] = useState(true);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -281,6 +282,7 @@ export default function MapListingPage() {
     setSheetDragOffset(0);
     setSelectedGroupKey(null);
     setPhotoIndex(0);
+    setIsTopPhotoVisible(true);
   };
 
   const openListingDetail = async (listingId) => {
@@ -292,6 +294,7 @@ export default function MapListingPage() {
     setDetailLoading(true);
     setDetailError("");
     setSheetMode(isMobileViewRef.current ? "half" : "full");
+    setIsTopPhotoVisible(true);
 
     try {
       const response = await fetchListingDetail(listingId);
@@ -712,13 +715,39 @@ export default function MapListingPage() {
 
       {hasCoordinates.length === 0 && <div className="map-overlay-card empty">좌표가 있는 매물이 없습니다.</div>}
 
-      {!detailLoading && !detailError && selectedListingId && detailImageUrls.length > 0 && (
+      {!detailLoading && !detailError && selectedListingId && detailImageUrls.length > 0 && isTopPhotoVisible && (
         <div className={`map-top-photo-panel ${!isMobileView && selectedListingId ? "with-side-panel" : ""}`}>
-          <img src={currentPhotoUrl} alt={`매물 사진 ${photoIndex + 1}`} className="map-top-photo-image" />
+          <button
+            type="button"
+            className="map-top-photo-close"
+            onClick={() => setIsTopPhotoVisible(false)}
+            aria-label="사진 닫기"
+          >
+            ×
+          </button>
+          <div className="map-top-photo-frame">
+            <button
+              type="button"
+              className="map-top-photo-arrow left"
+              onClick={showPrevPhoto}
+              disabled={detailImageUrls.length <= 1}
+              aria-label="이전 사진"
+            >
+              &lt;
+            </button>
+            <img src={currentPhotoUrl} alt={`매물 사진 ${photoIndex + 1}`} className="map-top-photo-image" />
+            <button
+              type="button"
+              className="map-top-photo-arrow right"
+              onClick={showNextPhoto}
+              disabled={detailImageUrls.length <= 1}
+              aria-label="다음 사진"
+            >
+              &gt;
+            </button>
+          </div>
           <div className="map-top-photo-controls">
-            <button type="button" onClick={showPrevPhoto} disabled={detailImageUrls.length <= 1}>이전</button>
             <span>{photoIndex + 1} / {detailImageUrls.length}</span>
-            <button type="button" onClick={showNextPhoto} disabled={detailImageUrls.length <= 1}>다음</button>
           </div>
         </div>
       )}
