@@ -62,6 +62,7 @@ function getImageUrl(item) {
 
 const DEFAULT_FORM = {
   address: "",
+  hotProperty: false,
   note: "",
   parking: "AVAILABLE",
   elevator: "YES",
@@ -85,6 +86,7 @@ function toFormModel(detail) {
 
   return {
     address: detail.address ?? "",
+    hotProperty: Boolean(detail.hotProperty ?? detail.hotProperty ?? false),
     note: detail.note ?? "",
     parking: detail.parking ?? DEFAULT_FORM.parking,
     elevator: detail.elevator ?? DEFAULT_FORM.elevator,
@@ -285,6 +287,7 @@ export default function CreateListingPage() {
     try {
       const listingPayload = {
         ...form,
+        hotProperty: Boolean(form.hotProperty),
         address: form.address.trim(),
         note: form.note.trim(),
         moveInDate: form.moveInDate ? form.moveInDate.replaceAll("-", "") : "",
@@ -358,6 +361,21 @@ export default function CreateListingPage() {
           <label>
             주소
             <input name="address" value={form.address} onChange={onChange} placeholder="상세 주소 입력" required />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <input
+              className="hot-property-checkbox"
+              type="checkbox"
+              name="hotProperty"
+              checked={Boolean(form.hotProperty)}
+              onChange={(event) => {
+                const { checked } = event.target;
+                setForm((prev) => ({ ...prev, hotProperty: checked }));
+              }}
+              style={{ width: 18, height: 18 }}
+            />
+            꿀매물
           </label>
 
           <label>
@@ -542,8 +560,6 @@ export default function CreateListingPage() {
     </section>
   );
 }
-
-
 
 
 

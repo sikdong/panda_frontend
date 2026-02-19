@@ -112,6 +112,17 @@
   border: none;
 }
 
+.listing-form .hot-property-checkbox {
+  min-height: 20px;
+  padding: 0;
+  border: none;
+}
+
+.listing-form .hot-property-checkbox:focus {
+  outline: none;
+  border: none;
+}
+
 .status {
   margin-top: 14px;
   padding: 11px 12px;
@@ -176,6 +187,26 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.map-detail-title-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+.map-detail-address-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: #3f4b44;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.map-detail-badge-row {
+  display: flex;
+  align-items: center;
 }
 
 .map-detail-head button {
@@ -499,6 +530,7 @@
 }
 
 .panda-marker {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 16px;
@@ -515,10 +547,72 @@
   transform: scale(1.06);
 }
 
-.panda-marker span {
+.panda-marker-count {
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
+}
+
+.panda-marker-hot-wrap {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.panda-marker-hot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid #ffffff;
+  background: #fff8e8;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.panda-marker-hot-label {
+  position: relative;
+  color: #d02222;
+  background: #ffffff;
+  border: 1px solid #f0b9b9;
+  border-radius: 10px;
+  padding: 4px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.panda-marker-hot-label-line {
+  display: block;
+}
+
+.panda-marker-hot-label::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 2px);
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  transform: rotate(45deg);
+}
+
+.panda-marker-hot-label::before {
+  content: "";
+  position: absolute;
+  top: calc(100% - 1px);
+  right: 9px;
+  width: 10px;
+  height: 10px;
+  background: #f0b9b9;
+  transform: rotate(45deg);
 }
 
 .panda-infowindow {
@@ -538,6 +632,26 @@
 
 .panda-infowindow strong {
   font-size: 13px;
+}
+
+.hot-property-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  border-radius: 999px;
+  border: none;
+  color: red;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.admin-hot-property-badge {
+  min-height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
 }
 
 @media (max-width: 768px) {

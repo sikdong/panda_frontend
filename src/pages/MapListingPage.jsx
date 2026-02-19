@@ -40,10 +40,11 @@ function formatLoanProducts(value) {
   return value.map((item) => LOAN_PRODUCT_LABELS[item] ?? item).join(", ");
 }
 
-function createMarkerIconContent(count, selected) {
+function createMarkerIconContent(count, selected, hasHotProperty) {
   return `
     <div class="panda-marker${selected ? " selected" : ""}">
-      <span>${count}</span>
+      <span class="panda-marker-count">${count}</span>
+      ${hasHotProperty ? '<span class="panda-marker-hot-wrap"><span class="panda-marker-hot-label"><span class="panda-marker-hot-label-line">🍯꿀매물🍯</span></span></span>' : ""}
     </div>
   `;
 }
@@ -74,11 +75,32 @@ function getListingId(listing) {
   return listing?.id ?? listing?.listingId ?? null;
 }
 
+function getHotPropertyValue(item) {
+  return Boolean(item?.isHotProperty ?? item?.hotProperty ?? false);
+}
+
+function toSummaryModel(listing) {
+  if (!listing || typeof listing !== "object") {
+    return listing;
+  }
+  return {
+    ...listing,
+    isHotProperty: getHotPropertyValue(listing)
+  };
+}
+
 function toDetailModel(response) {
   if (!response) {
     return null;
   }
-  return response.data ?? response;
+  const detail = response.data ?? response;
+  if (!detail || typeof detail !== "object") {
+    return detail;
+  }
+  return {
+    ...detail,
+    isHotProperty: getHotPropertyValue(detail)
+  };
 }
 
 function extractImageUrls(detail) {
@@ -118,6 +140,9 @@ function formatDetailValue(key, value) {
   if (key === "deposit" || key === "monthlyRent" || key === "viewCount") {
     return formatNumber(value);
   }
+  if (key === "isHotProperty") {
+    return value ? "꿀매물" : "일반";
+  }
   if (key === "loanProducts") {
     return formatLoanProducts(value);
   }
@@ -151,7 +176,13 @@ function sortDetailEntries(detail) {
   }
 
   return Object.entries(detail)
-    .filter(([key]) => key !== "imagePaths" && key !== "imageFilePaths")
+    .filter(([key]) =>
+      key !== "imagePaths" &&
+      key !== "imageFilePaths" &&
+      key !== "address" &&
+      key !== "isHotProperty" &&
+      key !== "hotProperty"
+    )
     .sort(([a], [b]) => {
       const aPriority = DETAIL_PRIORITY_KEYS.indexOf(a);
       const bPriority = DETAIL_PRIORITY_KEYS.indexOf(b);
@@ -266,12 +297,15 @@ export default function MapListingPage() {
     return Array.from(grouped.values()).map((group) => ({
       ...group,
       latitude: group.latitudeSum / group.count,
-      longitude: group.longitudeSum / group.count
+      longitude: group.longitudeSum / group.count,
+      hasHotProperty: group.listings.some((listing) => getHotPropertyValue(listing))
     }));
   }, [hasCoordinates]);
   const detailImageUrls = useMemo(() => extractImageUrls(selectedListingDetail), [selectedListingDetail]);
   const detailEntries = useMemo(() => sortDetailEntries(selectedListingDetail), [selectedListingDetail]);
   const currentPhotoUrl = detailImageUrls[photoIndex] ?? "";
+  const selectedListingAddress = selectedListingDetail?.address ?? "주소 정보 없음";
+  const selectedListingIsHotProperty = getHotPropertyValue(selectedListingDetail);
 
   const closeDetails = () => {
     setSelectedListingId(null);
@@ -326,7 +360,7 @@ export default function MapListingPage() {
     head.style.gap = "8px";
 
     const title = document.createElement("strong");
-    title.textContent = `동일 위치 매물 ${group.count}건`;
+    title.textContent = `동일 위치 매물 ${group.count}건${group.hasHotProperty ? " · 꿀매물 포함" : ""}`;
     head.appendChild(title);
 
     const closeButton = document.createElement("button");
@@ -371,6 +405,7 @@ export default function MapListingPage() {
       }
       item.innerHTML = `
         <div style="font-weight:700; margin-bottom:4px;">${listing.address ?? "주소 정보 없음"}</div>
+        ${listing.isHotProperty ? '<div style="margin-bottom:4px;"><span class="hot-property-badge">🍯 꿀매물</span></div>' : ""}
         <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
         <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
         <div>방 구조: ${formatRoomType(listing.roomType)}</div>
@@ -422,7 +457,7 @@ export default function MapListingPage() {
       try {
         const data = await fetchUnsoldListings();
         if (mounted) {
-          setListings(data ?? []);
+          setListings(Array.isArray(data) ? data.map(toSummaryModel) : []);
         }
       } catch (error) {
         if (mounted) {
@@ -504,7 +539,7 @@ export default function MapListingPage() {
         map,
         position: new naverMaps.LatLng(group.latitude, group.longitude),
         icon: {
-          content: createMarkerIconContent(group.count, false),
+          content: createMarkerIconContent(group.count, false, group.hasHotProperty),
           anchor: new naverMaps.Point(16, 16)
         }
       });
@@ -513,7 +548,7 @@ export default function MapListingPage() {
         handleMarkerSelect(group, map, marker);
       });
 
-      return { key: group.key, count: group.count, marker };
+      return { key: group.key, count: group.count, hasHotProperty: group.hasHotProperty, marker };
     });
 
     if (selectedGroupKey && !groupedCoordinates.some((group) => group.key === selectedGroupKey)) {
@@ -539,9 +574,9 @@ export default function MapListingPage() {
       return;
     }
 
-    markersRef.current.forEach(({ key, count, marker }) => {
+    markersRef.current.forEach(({ key, count, hasHotProperty, marker }) => {
       marker.setIcon({
-        content: createMarkerIconContent(count, key === selectedGroupKey),
+        content: createMarkerIconContent(count, key === selectedGroupKey, hasHotProperty),
         anchor: new naverMaps.Point(16, 16)
       });
     });
@@ -755,7 +790,15 @@ export default function MapListingPage() {
       {!isMobileView && selectedListingId && (
         <aside className="map-side-panel open">
           <div className="map-detail-head">
-            <strong>매물 상세</strong>
+            <div className="map-detail-title-wrap">
+              <strong>매물 상세</strong>
+              <div className="map-detail-address-row">{selectedListingAddress}</div>
+              {selectedListingIsHotProperty && (
+                <div className="map-detail-badge-row">
+                  <span className="hot-property-badge">🍯 꿀매물</span>
+                </div>
+              )}
+            </div>
             <div className="map-sheet-actions">
               <button type="button" onClick={closeDetails}>닫기</button>
             </div>
@@ -809,7 +852,15 @@ export default function MapListingPage() {
             ) : (
               <div className="map-sheet-content">
                 <div className="map-detail-head">
-                  <strong>매물 상세</strong>
+                  <div className="map-detail-title-wrap">
+                    <strong>매물 상세</strong>
+                    <div className="map-detail-address-row">{selectedListingAddress}</div>
+                    {selectedListingIsHotProperty && (
+                      <div className="map-detail-badge-row">
+                        <span className="hot-property-badge">🍯 꿀매물</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="map-sheet-actions">
                     <button type="button" onClick={() => setSheetMode(sheetMode === "full" ? "half" : "full")}>
                       {sheetMode === "full" ? "접기" : "펼치기"}

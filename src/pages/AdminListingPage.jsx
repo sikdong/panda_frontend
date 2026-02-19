@@ -10,6 +10,10 @@ function getSoldValue(listing) {
   return Boolean(listing?.isSold ?? listing?.sold ?? listing?.saleCompleted ?? false);
 }
 
+function getHotPropertyValue(listing) {
+  return Boolean(listing?.isHotProperty ?? listing?.hotProperty ?? false);
+}
+
 function normalize(value) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -264,7 +268,10 @@ export default function AdminListingPage() {
                   paddingBottom: 10
                 }}
               >
-                <div>{listing.address ?? "주소 정보 없음"}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span>{listing.address ?? "주소 정보 없음"}</span>
+                  {getHotPropertyValue(listing) && <span className="hot-property-badge admin-hot-property-badge">꿀매물</span>}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <span>보증금: {formatNumber(listing.deposit)}</span>

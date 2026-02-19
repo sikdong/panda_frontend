@@ -54,6 +54,7 @@ export const DETAIL_KEY_LABELS = {
   listingId: "매물 ID",
   viewCount: "조회수",
   address: "주소",
+  isHotProperty: "꿀매물",
   note: "비고",
   parking: "주차",
   elevator: "엘리베이터",
@@ -91,7 +92,7 @@ export const CONTRACT_TYPE_LABELS = {
   MONTHLY_RENT: "월세"
 };
 
-export const DETAIL_PRIORITY_KEYS = ["address", "deposit", "monthlyRent", "viewCount", "roomType"];
+export const DETAIL_PRIORITY_KEYS = ["address", "isHotProperty", "deposit", "monthlyRent", "viewCount", "roomType"];
 
 export const SHEET_TRANSLATE = {
   closed: 100,
