@@ -38,26 +38,26 @@ async function request(path, options = {}) {
 }
 
 export function createListing(payload) {
-  return request("/api/listings", {
+  return request("/api/v1/listings", {
     method: "POST",
     body: payload instanceof FormData ? payload : JSON.stringify(payload)
   });
 }
 
 export function fetchListingSummaries() {
-  return request("/api/listings/summaries");
+  return request("/api/v1/listings/summaries");
 }
 
 export function fetchUnsoldListings() {
-  return request("/api/listings/unsold");
+  return request("/api/v1/listings/unsold");
 }
 
 export function fetchListingDetail(listingId) {
-  return request(`/api/listings/${listingId}`);
+  return request(`/api/v1/listings/${listingId}`);
 }
 
 export function updateListingSoldStatus(listingId, completed) {
-  return request(`/api/listings/${listingId}/sold`, {
+  return request(`/api/v1/listings/${listingId}/sold`, {
     method: "PATCH",
     body: JSON.stringify({
       sold: completed
@@ -66,13 +66,13 @@ export function updateListingSoldStatus(listingId, completed) {
 }
 
 export function deleteListing(listingId) {
-  return request(`/api/listings/${listingId}`, {
+  return request(`/api/v1/listings/${listingId}`, {
     method: "DELETE"
   });
 }
 
 export function updateListing(listingId, payload) {
-  return request(`/api/listings/${listingId}`, {
+  return request(`/api/v1/listings/${listingId}`, {
     method: "PATCH",
     body: payload instanceof FormData ? payload : JSON.stringify(payload)
   });
