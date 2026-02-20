@@ -70,6 +70,7 @@ const DEFAULT_FORM = {
   contractType: "JEONSE",
   roomType: "ONE_ROOM",
   loanProducts: ["HF_YOUTH"],
+  moveInOption: "NEGOTIABLE",
   moveInDate: "",
   deposit: "",
   monthlyRent: ""
@@ -94,6 +95,7 @@ function toFormModel(detail) {
     contractType: detail.contractType ?? DEFAULT_FORM.contractType,
     roomType: detail.roomType ?? DEFAULT_FORM.roomType,
     loanProducts: parsedLoanProducts,
+    moveInOption: detail.moveInType ?? detail.moveInOption ?? DEFAULT_FORM.moveInOption,
     moveInDate: normalizeDateValue(detail.moveInDate),
     deposit: formatMoneyInput(detail.deposit),
     monthlyRent: formatMoneyInput(detail.monthlyRent)
@@ -192,7 +194,11 @@ export default function CreateListingPage() {
 
   const onChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "moveInOption" && value === "IMMEDIATE" ? { moveInDate: "" } : {})
+    }));
   };
 
   const onMoneyChange = (event) => {
@@ -276,6 +282,11 @@ export default function CreateListingPage() {
       return;
     }
 
+    if (form.moveInOption === "FIXED" && !form.moveInDate) {
+      setStatus({ type: "error", message: "고정 선택 시 입주 가능일이 필요합니다." });
+      return;
+    }
+
     if (form.loanProducts.length === 0) {
       setStatus({ type: "error", message: "대출상품을 최소 1개 이상 선택해주세요." });
       return;
@@ -287,10 +298,11 @@ export default function CreateListingPage() {
     try {
       const listingPayload = {
         ...form,
+        moveInType: form.moveInOption,
         hotProperty: Boolean(form.hotProperty),
         address: form.address.trim(),
         note: form.note.trim(),
-        moveInDate: form.moveInDate ? form.moveInDate.replaceAll("-", "") : "",
+        moveInDate: form.moveInDate ? form.moveInDate.replaceAll("-", "") : null,
         deposit: parseMoneyValue(form.deposit),
         monthlyRent: parseMoneyValue(form.monthlyRent)
       };
@@ -449,10 +461,23 @@ export default function CreateListingPage() {
             </div>
           </fieldset>
 
-          <label>
-            입주 가능일
-            <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} />
-          </label>
+          <div style={{ display: "grid", gridColumn: "1 / -1", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <label>
+              입주 옵션
+              <select name="moveInOption" value={form.moveInOption} onChange={onChange}>
+                <option value="NEGOTIABLE">협의필요</option>
+                <option value="FIXED">지정날짜 </option>
+                <option value="IMMEDIATE">공실(즉시입주)</option>
+              </select>
+            </label>
+            {form.moveInOption !== "IMMEDIATE" && (
+              <label>
+                입주 가능일
+                <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} />
+              </label>
+            )}
+            {form.moveInOption === "IMMEDIATE" && <div aria-hidden="true" />}
+          </div>
 
           <label>
             보증금
@@ -560,16 +585,6 @@ export default function CreateListingPage() {
     </section>
   );
 }
-
-
-
-
-
-
-
-
-
-
 
 
 

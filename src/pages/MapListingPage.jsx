@@ -136,6 +136,29 @@ function formatDetailKey(key) {
   return DETAIL_KEY_LABELS[key] ?? key;
 }
 
+function formatMoveInDateDisplay(detail) {
+  const moveInType = detail?.moveInType ?? "FIXED";
+  const moveInDate = detail?.moveInDate;
+  const moveInTypeLabel = detail?.moveInTypeLabel;
+
+  if (moveInType === "NEGOTIABLE") {
+    if (moveInDate && moveInTypeLabel) {
+      return `${moveInDate} (${moveInTypeLabel})`;
+    }
+    return moveInDate ?? moveInTypeLabel ?? "-";
+  }
+
+  if (moveInType === "FIXED") {
+    return moveInDate ?? "-";
+  }
+
+  if (moveInType === "IMMEDIATE") {
+    return moveInTypeLabel ?? "-";
+  }
+
+  return moveInDate ?? moveInTypeLabel ?? "-";
+}
+
 function formatDetailValue(key, value) {
   if (key === "deposit" || key === "monthlyRent" || key === "viewCount") {
     return formatNumber(value);
@@ -175,15 +198,24 @@ function sortDetailEntries(detail) {
     return [];
   }
 
-  return Object.entries(detail)
+  const entries = Object.entries(detail)
     .filter(([key]) =>
       key !== "imagePaths" &&
       key !== "imageFilePaths" &&
       key !== "address" &&
       key !== "isHotProperty" &&
-      key !== "hotProperty"
-    )
-    .sort(([a], [b]) => {
+      key !== "hotProperty" &&
+      key !== "moveInType" &&
+      key !== "moveInTypeLabel"
+    );
+
+  const hasMoveInDateEntry = entries.some(([key]) => key === "moveInDate");
+  const hasMoveInTypeContext = detail.moveInType != null || detail.moveInTypeLabel != null;
+  if (!hasMoveInDateEntry && hasMoveInTypeContext) {
+    entries.push(["moveInDate", detail.moveInDate ?? null]);
+  }
+
+  return entries.sort(([a], [b]) => {
       const aPriority = DETAIL_PRIORITY_KEYS.indexOf(a);
       const bPriority = DETAIL_PRIORITY_KEYS.indexOf(b);
       const aRank = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
@@ -813,7 +845,9 @@ export default function MapListingPage() {
                 <div key={key}>
                   <strong>{formatDetailKey(key)}:</strong>{" "}
                   <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {formatDetailValue(key, value)}
+                    {key === "moveInDate"
+                      ? formatMoveInDateDisplay(selectedListingDetail)
+                      : formatDetailValue(key, value)}
                   </span>
                 </div>
               ))}
@@ -878,7 +912,9 @@ export default function MapListingPage() {
                       <div key={key}>
                         <strong>{formatDetailKey(key)}:</strong>{" "}
                         <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                          {formatDetailValue(key, value)}
+                          {key === "moveInDate"
+                            ? formatMoveInDateDisplay(selectedListingDetail)
+                            : formatDetailValue(key, value)}
                         </span>
                       </div>
                     ))}
