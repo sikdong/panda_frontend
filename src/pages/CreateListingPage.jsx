@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createListing, fetchListingDetail, updateListing } from "../api/listingApi";
+import { createListing, fetchListingEditDetail, updateListing } from "../api/listingApi";
 
 const LOAN_PRODUCTS = [
   { value: "HF_YOUTH", label: "HF 버팀목" },
@@ -165,7 +165,7 @@ export default function CreateListingPage() {
 
     (async () => {
       try {
-        const response = await fetchListingDetail(listingId);
+        const response = await fetchListingEditDetail(listingId);
         const detail = response?.data ?? response;
         if (mounted) {
           setForm(toFormModel(detail));

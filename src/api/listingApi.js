@@ -56,6 +56,10 @@ export function fetchListingDetail(listingId) {
   return request(`/api/v1/listings/${listingId}`);
 }
 
+export function fetchListingEditDetail(listingId) {
+  return request(`/api/v1/listings/${listingId}/edit`);
+}
+
 export function updateListingSoldStatus(listingId, completed) {
   return request(`/api/v1/listings/${listingId}/sold`, {
     method: "PATCH",
