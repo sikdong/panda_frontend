@@ -1,31 +1,14 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { deleteListing, fetchListingSummaries, updateListingSoldStatus } from "../api/listingApi";
-
-function getListingId(listing) {
-  return listing?.id ?? listing?.listingId ?? null;
-}
-
-function getSoldValue(listing) {
-  return Boolean(listing?.isSold ?? listing?.sold ?? listing?.saleCompleted ?? false);
-}
-
-function getHotPropertyValue(listing) {
-  return Boolean(listing?.isHotProperty ?? listing?.hotProperty ?? false);
-}
-
-function normalize(value) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-function formatNumber(value) {
-  return Number(value ?? 0).toLocaleString();
-}
-
-function getLatestTimestamp(listing) {
-  const timestamp = Date.parse(listing?.createdAt ?? listing?.updatedAt ?? "");
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-}
+import {
+  getListingId,
+  getSoldValue,
+  normalizeString,
+  getLatestTimestamp
+} from "../utils/listingUtils";
+import AdminListingItem from "../components/Admin/AdminListingItem";
+import AdminSortMenu from "../components/Admin/AdminSortMenu";
 
 export default function AdminListingPage() {
   const [listings, setListings] = useState([]);
@@ -34,127 +17,52 @@ export default function AdminListingPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [busyIds, setBusyIds] = useState([]);
   const [sortType, setSortType] = useState("LATEST");
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef(null);
 
   useEffect(() => {
-    let mounted = true;
-
     (async () => {
       try {
         const data = await fetchListingSummaries();
-        if (mounted) {
-          setListings(data ?? []);
-        }
-      } catch (error) {
-        if (mounted) {
-          setErrorMessage(error.message ?? "목록 조회에 실패했습니다.");
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
+        setListings(data ?? []);
+      } catch (err) { setErrorMessage(err.message ?? "목록 조회 실패"); }
+      finally { setLoading(false); }
     })();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  const setBusy = (listingId, busy) => {
-    setBusyIds((prev) => {
-      if (busy) {
-        return prev.includes(listingId) ? prev : [...prev, listingId];
-      }
-      return prev.filter((id) => id !== listingId);
-    });
-  };
+  const setBusy = (id, busy) => setBusyIds(prev => busy ? [...new Set([...prev, id])] : prev.filter(i => i !== id));
 
   const onToggleCompleted = async (listing) => {
-    const listingId = getListingId(listing);
-    if (!listingId) {
-      alert("매물 ID가 없어 상태를 변경할 수 없습니다.");
-      return;
-    }
-
+    const id = getListingId(listing);
+    if (!id) return alert("매물 ID 없음");
     const nextValue = !getSoldValue(listing);
-    setBusy(listingId, true);
-
-    // Optimistic update for snappy admin interaction.
-    setListings((prev) => prev.map((item) => (getListingId(item) === listingId ? { ...item, isSold: nextValue } : item)));
-
-    try {
-      await updateListingSoldStatus(listingId, nextValue);
-    } catch (error) {
-      setListings((prev) => prev.map((item) => (getListingId(item) === listingId ? { ...item, isSold: !nextValue } : item)));
-      alert(error.message ?? "판매완료 상태 변경에 실패했습니다.");
-    } finally {
-      setBusy(listingId, false);
-    }
+    setBusy(id, true);
+    setListings(prev => prev.map(item => getListingId(item) === id ? { ...item, isSold: nextValue } : item));
+    try { await updateListingSoldStatus(id, nextValue); }
+    catch (err) {
+      setListings(prev => prev.map(item => getListingId(item) === id ? { ...item, isSold: !nextValue } : item));
+      alert(err.message ?? "상태 변경 실패");
+    } finally { setBusy(id, false); }
   };
 
   const onDelete = async (listing) => {
-    const listingId = getListingId(listing);
-    if (!listingId) {
-      alert("매물 ID가 없어 삭제할 수 없습니다.");
-      return;
-    }
-
-    const ok = window.confirm("이 매물을 삭제할까요?");
-    if (!ok) {
-      return;
-    }
-
-    setBusy(listingId, true);
-
+    const id = getListingId(listing);
+    if (!id || !window.confirm("삭제할까요?")) return;
+    setBusy(id, true);
     try {
-      await deleteListing(listingId);
-      setListings((prev) => prev.filter((item) => getListingId(item) !== listingId));
-    } catch (error) {
-      alert(error.message ?? "매물 삭제에 실패했습니다.");
-    } finally {
-      setBusy(listingId, false);
-    }
+      await deleteListing(id);
+      setListings(prev => prev.filter(i => getListingId(i) !== id));
+    } catch (err) { alert(err.message ?? "삭제 실패"); }
+    finally { setBusy(id, false); }
   };
 
-  const filteredListings = useMemo(() => {
-    const query = normalize(addressQuery);
-    if (!query) {
-      return listings;
-    }
-    return listings.filter((listing) => normalize(listing?.address).includes(query));
-  }, [addressQuery, listings]);
-
   const sortedFilteredListings = useMemo(() => {
-    const next = [...filteredListings];
-    if (sortType === "VIEW_COUNT") {
-      return next.sort((a, b) => Number(b?.viewCount ?? 0) - Number(a?.viewCount ?? 0));
-    }
-
-    return next.sort((a, b) => {
-      const byTimestamp = getLatestTimestamp(b) - getLatestTimestamp(a);
-      if (byTimestamp !== 0) {
-        return byTimestamp;
-      }
-      return String(getListingId(b) ?? "").localeCompare(String(getListingId(a) ?? ""));
+    const query = normalizeString(addressQuery);
+    const filtered = query ? listings.filter(l => normalizeString(l.address).includes(query)) : listings;
+    return [...filtered].sort((a, b) => {
+      if (sortType === "VIEW_COUNT") return Number(b.viewCount ?? 0) - Number(a.viewCount ?? 0);
+      const ts = getLatestTimestamp(b) - getLatestTimestamp(a);
+      return ts !== 0 ? ts : String(getListingId(b) ?? "").localeCompare(String(getListingId(a) ?? ""));
     });
-  }, [filteredListings, sortType]);
-
-  useEffect(() => {
-    if (!isSortMenuOpen) {
-      return;
-    }
-
-    const onPointerDown = (event) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
-        setIsSortMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [isSortMenuOpen]);
+  }, [listings, addressQuery, sortType]);
 
   return (
     <section className="panel">
@@ -166,150 +74,29 @@ export default function AdminListingPage() {
         <input
           type="text"
           value={addressQuery}
-          onChange={(event) => setAddressQuery(event.target.value)}
+          onChange={e => setAddressQuery(e.target.value)}
           placeholder="주소 검색"
-          aria-label="주소 검색"
           style={{ flex: 1, minHeight: 40, border: "1px solid #d7deda", borderRadius: 8, padding: "0 10px" }}
         />
-        <div ref={sortMenuRef} style={{ position: "relative" }}>
-          <button
-            type="button"
-            aria-label="정렬 옵션"
-            onClick={() => setIsSortMenuOpen((prev) => !prev)}
-            style={{
-              minHeight: 40,
-              border: "1px solid #d7deda",
-              borderRadius: 8,
-              background: "#fff",
-              padding: "0 12px",
-              cursor: "pointer",
-              whiteSpace: "nowrap"
-            }}
-          >
-            정렬
-          </button>
-          {isSortMenuOpen && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: 44,
-                minWidth: 130,
-                border: "1px solid #d7deda",
-                borderRadius: 8,
-                background: "#fff",
-                boxShadow: "0 8px 18px rgba(0, 0, 0, 0.08)",
-                padding: 6,
-                zIndex: 20
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setSortType("LATEST");
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  minHeight: 34,
-                  border: "none",
-                  borderRadius: 6,
-                  background: sortType === "LATEST" ? "#eef6f0" : "transparent",
-                  cursor: "pointer",
-                  padding: "0 10px"
-                }}
-              >
-                최신순
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSortType("VIEW_COUNT");
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  minHeight: 34,
-                  border: "none",
-                  borderRadius: 6,
-                  background: sortType === "VIEW_COUNT" ? "#eef6f0" : "transparent",
-                  cursor: "pointer",
-                  padding: "0 10px"
-                }}
-              >
-                조회수순
-              </button>
-            </div>
-          )}
-        </div>
+        <AdminSortMenu current={sortType} onSelect={setSortType} />
       </div>
 
-      {loading && <p>목록을 불러오는 중...</p>}
+      {loading && <p>로딩 중...</p>}
       {!loading && errorMessage && <p className="status error">오류: {errorMessage}</p>}
       {!loading && !errorMessage && listings.length === 0 && <p>등록된 매물이 없습니다.</p>}
-      {!loading && !errorMessage && listings.length > 0 && sortedFilteredListings.length === 0 && <p>검색 결과가 없습니다.</p>}
+      {!loading && !errorMessage && sortedFilteredListings.length === 0 && listings.length > 0 && <p>검색 결과가 없습니다.</p>}
 
       {!loading && !errorMessage && sortedFilteredListings.length > 0 && (
         <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 10 }}>
-          {sortedFilteredListings.map((listing, index) => {
-            const listingId = getListingId(listing);
-            const busy = listingId ? busyIds.includes(listingId) : false;
-            const completed = getSoldValue(listing);
-
-            return (
-              <li
-                key={listingId ?? `${listing.address}-${index}`}
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  borderBottom: "1px solid #e6ece8",
-                  paddingBottom: 10
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span>{listing.address ?? "주소 정보 없음"}</span>
-                  {getHotPropertyValue(listing) && <span className="hot-property-badge admin-hot-property-badge">꿀매물</span>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <span>보증금: {formatNumber(listing.deposit)}</span>
-                    <span>월세: {formatNumber(listing.monthlyRent)}</span>
-                    <span>조회수: {formatNumber(listing.viewCount)}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button
-                      type="button"
-                      onClick={() => onToggleCompleted(listing)}
-                      disabled={busy}
-                      style={{
-                        minHeight: 34,
-                        border: "1px solid #d7deda",
-                        borderRadius: 8,
-                        background: completed ? "#1f603d" : "#ffffff",
-                        color: completed ? "#ffffff" : "#1f2421",
-                        padding: "0 10px",
-                        cursor: "pointer",
-                        fontWeight: 700
-                      }}
-                    >
-                      {completed ? "거래완료 해제" : "거래완료"}
-                    </button>
-                    <Link to={`/lss/${listingId}`} className="link-button" style={{ minHeight: 34, padding: "0 10px", fontWeight: 400 }}>수정</Link>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(listing)}
-                      disabled={busy}
-                      style={{ minHeight: 34, border: "1px solid #d7deda", borderRadius: 8, background: "#fff", padding: "0 10px", cursor: "pointer" }}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
+          {sortedFilteredListings.map((listing, idx) => (
+            <AdminListingItem
+              key={getListingId(listing) ?? idx}
+              listing={listing}
+              busy={busyIds.includes(getListingId(listing))}
+              onToggleCompleted={onToggleCompleted}
+              onDelete={onDelete}
+            />
+          ))}
         </ol>
       )}
     </section>

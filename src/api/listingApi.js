@@ -81,3 +81,18 @@ export function updateListing(listingId, payload) {
     body: payload instanceof FormData ? payload : JSON.stringify(payload)
   });
 }
+
+export function fetchBuildingLedger(params) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/api/v1/listings/building-ledger?${query}`);
+}
+
+export function fetchBuildingTitles(params) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/api/v1/listings/building-ledger/titles?${query}`);
+}
+
+export function fetchBuildingExclusivity(params) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/api/v1/listings/building-ledger/exclusivity?${query}`);
+}
