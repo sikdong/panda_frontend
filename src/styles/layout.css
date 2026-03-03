@@ -285,7 +285,7 @@
 .map-sheet-handle {
   display: grid;
   place-items: center;
-  padding: 8px 0 6px;
+  padding: 14px 0 10px;
   touch-action: none;
   cursor: grab;
 }

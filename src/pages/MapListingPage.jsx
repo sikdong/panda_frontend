@@ -31,9 +31,23 @@ function createMarkerIconContent(count, selected, hasHot) {
 }
 
 function nextSheetMode(current, deltaY) {
-  if (deltaY < -60) return current === "closed" ? "half" : (current === "half" ? "full" : "full");
-  if (deltaY > 60) return current === "full" ? "half" : (current === "half" ? "closed" : "closed");
+  const viewportHeight = window.innerHeight || 800;
+  const threshold = Math.min(120, Math.max(48, Math.round(viewportHeight * 0.1)));
+  if (deltaY < -threshold) return current === "closed" ? "half" : (current === "half" ? "full" : "full");
+  if (deltaY > threshold) return current === "full" ? "half" : (current === "half" ? "closed" : "closed");
   return current;
+}
+
+function clampSheetDragOffset(current, deltaY) {
+  const viewportHeight = window.innerHeight || 800;
+  const maxUp = current === "half"
+    ? Math.round(viewportHeight * 0.22)
+    : (current === "closed" ? Math.round(viewportHeight * 0.3) : Math.round(viewportHeight * 0.08));
+  const maxDown = current === "full"
+    ? Math.round(viewportHeight * 0.22)
+    : (current === "half" ? Math.round(viewportHeight * 0.3) : Math.round(viewportHeight * 0.08));
+
+  return Math.min(maxDown, Math.max(-maxUp, deltaY));
 }
 
 function matchesListingFilters(listing, region, roomType, loanFilter) {
@@ -208,11 +222,17 @@ export default function MapListingPage() {
       {isMobileView && (
         <>
           <div className={`map-sheet-backdrop ${selectedListingId ? "open" : ""}`} onClick={closeDetails} />
-          <section className={`map-bottom-sheet ${selectedListingId ? "open" : ""}`} style={{ transform: `translateY(calc(${SHEET_TRANSLATE[sheetMode]}% + ${sheetDragOffset}px))` }}>
+          <section
+            className={`map-bottom-sheet ${selectedListingId ? "open" : ""}`}
+            style={{
+              transform: `translateY(calc(${SHEET_TRANSLATE[sheetMode]}% + ${sheetDragOffset}px))`,
+              transition: isSheetDragging ? "none" : "transform 220ms ease"
+            }}
+          >
             <div
               className="map-sheet-handle"
               onPointerDown={(e) => { setIsSheetDragging(true); sheetStartYRef.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
-              onPointerMove={(e) => isSheetDragging && setSheetDragOffset(e.clientY - sheetStartYRef.current)}
+              onPointerMove={(e) => isSheetDragging && setSheetDragOffset(clampSheetDragOffset(sheetMode, e.clientY - sheetStartYRef.current))}
               onPointerUp={(e) => {
                 if (!isSheetDragging) return;
                 setIsSheetDragging(false);
@@ -222,6 +242,7 @@ export default function MapListingPage() {
                 else setSheetMode(next);
                 setSheetDragOffset(0);
               }}
+              onPointerCancel={() => { setIsSheetDragging(false); setSheetDragOffset(0); }}
             >
               <span />
             </div>
