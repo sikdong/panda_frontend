@@ -70,6 +70,7 @@ export default function MapListingPage() {
   const naverMapsRef = useRef(null);
   const markersRef = useRef([]);
   const infoWindowRef = useRef(null);
+  const sheetStartYRef = useRef(0);
 
   const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, filters.region.trim().toLowerCase(), filters.roomType, filters.loanFilter)), [listings, filters]);
   const groupedCoordinates = useMemo(() => {
@@ -182,7 +183,24 @@ export default function MapListingPage() {
 
       {!isMobileView && selectedListingId && (
         <aside className="map-side-panel open">
-          <button type="button" style={{ position: "absolute", right: 14, top: 14 }} onClick={closeDetails}>닫기</button>
+          <button
+            type="button"
+            aria-label="닫기"
+            style={{
+              position: "absolute",
+              right: 14,
+              top: 14,
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              border: "1px solid #cad3cd",
+              background: "#fff",
+              cursor: "pointer"
+            }}
+            onClick={closeDetails}
+          >
+            x
+          </button>
           <ListingDetailContent detail={selectedListingDetail} loading={detailLoading} error={detailError} />
         </aside>
       )}
@@ -190,13 +208,42 @@ export default function MapListingPage() {
       {isMobileView && (
         <>
           <div className={`map-sheet-backdrop ${selectedListingId ? "open" : ""}`} onClick={closeDetails} />
-          <section className={`map-bottom-sheet ${selectedListingId ? "open" : ""}`} style={{ transform: `translateY(calc(${SHEET_TRANSLATE[sheetMode]}% + ${sheetDragOffset}px))` }}
-            onPointerDown={(e) => { setIsSheetDragging(true); dragPointerIdRef.current = e.pointerId; e.currentTarget.setPointerCapture(e.pointerId); }}
-            onPointerMove={(e) => isSheetDragging && setSheetDragOffset(e.clientY - e.currentTarget.offsetTop)}
-            onPointerUp={(e) => { setIsSheetDragging(false); const next = nextSheetMode(sheetMode, e.clientY - e.currentTarget.offsetTop); if (next === "closed") closeDetails(); else setSheetMode(next); setSheetDragOffset(0); }}>
-            <div className="map-sheet-handle"><span /></div>
+          <section className={`map-bottom-sheet ${selectedListingId ? "open" : ""}`} style={{ transform: `translateY(calc(${SHEET_TRANSLATE[sheetMode]}% + ${sheetDragOffset}px))` }}>
+            <div
+              className="map-sheet-handle"
+              onPointerDown={(e) => { setIsSheetDragging(true); sheetStartYRef.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+              onPointerMove={(e) => isSheetDragging && setSheetDragOffset(e.clientY - sheetStartYRef.current)}
+              onPointerUp={(e) => {
+                if (!isSheetDragging) return;
+                setIsSheetDragging(false);
+                const deltaY = e.clientY - sheetStartYRef.current;
+                const next = nextSheetMode(sheetMode, deltaY);
+                if (next === "closed") closeDetails();
+                else setSheetMode(next);
+                setSheetDragOffset(0);
+              }}
+            >
+              <span />
+            </div>
             <div className="map-sheet-content">
-              <button type="button" style={{ float: "right" }} onClick={closeDetails}>닫기</button>
+              <button
+                type="button"
+                aria-label="닫기"
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: 14,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  border: "1px solid #cad3cd",
+                  background: "#fff",
+                  cursor: "pointer"
+                }}
+                onClick={closeDetails}
+              >
+                x
+              </button>
               <ListingDetailContent detail={selectedListingDetail} loading={detailLoading} error={detailError} />
             </div>
           </section>
