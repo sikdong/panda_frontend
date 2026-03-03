@@ -85,6 +85,7 @@ export default function MapListingPage() {
   const markersRef = useRef([]);
   const infoWindowRef = useRef(null);
   const sheetStartYRef = useRef(0);
+  const photoSwipeStartXRef = useRef(null);
 
   const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, filters.region.trim().toLowerCase(), filters.roomType, filters.loanFilter)), [listings, filters]);
   const groupedCoordinates = useMemo(() => {
@@ -170,6 +171,27 @@ export default function MapListingPage() {
 
   const closeDetails = () => { setSelectedListingId(null); setSelectedListingDetail(null); setDetailError(""); setSheetMode("closed"); setSelectedGroupKey(null); };
   const applyFilters = () => { setFilters(draftFilters); setIsFilterOpen(false); if (mapInstanceRef.current) { const first = listings.find(l => matchesListingFilters(l, draftFilters.region.trim().toLowerCase(), draftFilters.roomType, draftFilters.loanFilter)); if (first) mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(first.latitude, first.longitude)); } };
+  const showPreviousPhoto = () => setPhotoIndex((p) => (p - 1 + detailImageUrls.length) % detailImageUrls.length);
+  const showNextPhoto = () => setPhotoIndex((p) => (p + 1) % detailImageUrls.length);
+  const onPhotoPointerDown = (e) => {
+    photoSwipeStartXRef.current = e.clientX;
+  };
+  const onPhotoPointerUp = (e) => {
+    if (photoSwipeStartXRef.current == null || detailImageUrls.length <= 1) {
+      photoSwipeStartXRef.current = null;
+      return;
+    }
+
+    const deltaX = e.clientX - photoSwipeStartXRef.current;
+    photoSwipeStartXRef.current = null;
+
+    if (Math.abs(deltaX) < 40) return;
+    if (deltaX < 0) showNextPhoto();
+    else showPreviousPhoto();
+  };
+  const onPhotoPointerCancel = () => {
+    photoSwipeStartXRef.current = null;
+  };
 
   if (loading) return <section className="map-page map-only"><div className="map-overlay-card">로딩 중...</div></section>;
   if (errorMessage) return <section className="map-page map-only"><div className="map-overlay-card error">오류: {errorMessage}</div></section>;
@@ -186,10 +208,15 @@ export default function MapListingPage() {
       {!detailLoading && selectedListingId && detailImageUrls.length > 0 && isTopPhotoVisible && (
         <div className={`map-top-photo-panel ${!isMobileView && selectedListingId ? "with-side-panel" : ""}`}>
           <button type="button" className="map-top-photo-close" onClick={() => setIsTopPhotoVisible(false)}>×</button>
-          <div className="map-top-photo-frame">
-            <button type="button" className="map-top-photo-arrow left" onClick={() => setPhotoIndex(p => (p - 1 + detailImageUrls.length) % detailImageUrls.length)} disabled={detailImageUrls.length <= 1}>&lt;</button>
+          <div
+            className="map-top-photo-frame"
+            onPointerDown={onPhotoPointerDown}
+            onPointerUp={onPhotoPointerUp}
+            onPointerCancel={onPhotoPointerCancel}
+          >
+            <button type="button" className="map-top-photo-arrow left" onClick={showPreviousPhoto} disabled={detailImageUrls.length <= 1}>&lt;</button>
             <img src={detailImageUrls[photoIndex]} alt="매물" className="map-top-photo-image" />
-            <button type="button" className="map-top-photo-arrow right" onClick={() => setPhotoIndex(p => (p + 1) % detailImageUrls.length)} disabled={detailImageUrls.length <= 1}>&gt;</button>
+            <button type="button" className="map-top-photo-arrow right" onClick={showNextPhoto} disabled={detailImageUrls.length <= 1}>&gt;</button>
           </div>
           <div className="map-top-photo-controls"><span>{photoIndex + 1} / {detailImageUrls.length}</span></div>
         </div>
