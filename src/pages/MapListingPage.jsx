@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchListingDetail, fetchUnsoldListings } from "../api/listingApi";
 import { loadNaverMapScript } from "../components/naverMapLoader";
@@ -125,9 +125,17 @@ export default function MapListingPage() {
         div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><strong>${g.count}건${g.hasHotProperty ? " · 꿀매물 포함" : ""}</strong><button id="iw-close">×</button></div><div id="iw-list" style="height:220px;overflow-y:auto"></div>`;
         div.querySelector("#iw-close").onclick = () => { infoWindowRef.current.close(); setSelectedGroupKey(null); };
         const list = div.querySelector("#iw-list");
-        g.listings.forEach(l => {
-          const lId = getListingId(l); const item = document.createElement("button"); item.style.cssText = "width:100%;margin-top:6px;text-align:left;border:1px solid #d9e2dc;border-radius:8px;background:#ffffff;padding:8px;cursor:pointer";
-          item.innerHTML = `<div style="font-weight:700">${l.address}</div>${getHotPropertyValue(l) ? '<span class="hot-property-badge">🍯 꿀매물</span>' : ""}<div>보증금: ${formatNumber(l.deposit)} / 월세: ${formatNumber(l.monthlyRent)}</div><div style="color:#2a7c4f;font-weight:700">상세 보기</div>`;
+        g.listings.forEach(listing => {
+          const lId = getListingId(listing); const item = document.createElement("button"); item.style.cssText = "width:100%;margin-top:6px;text-align:left;border:1px solid #d9e2dc;border-radius:8px;background:#ffffff;padding:8px;cursor:pointer";
+          item.innerHTML = `
+        <div style="font-weight:700; margin-bottom:4px;">${listing.address ?? "주소 정보 없음"}</div>
+        ${getHotPropertyValue(listing) ? '<div style="margin-bottom:4px;"><span class="hot-property-badge">🍯 꿀매물</span></div>' : ""}
+        <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
+        <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
+        <div>방 구조: ${formatRoomType(listing.roomType)}</div>
+        <div>조회수: ${formatNumber(listing.viewCount)}</div>
+        <div style="margin-top:4px; color:#2a7c4f; font-weight:700;">상세 보기</div>
+      `;
           item.onclick = async () => { setSelectedListingId(lId); setDetailLoading(true); setSheetMode(isMobileView ? "half" : "full"); setIsTopPhotoVisible(true); try { const res = await fetchListingDetail(lId); setSelectedListingDetail(res?.data ?? res); setPhotoIndex(0); } catch (e) { setDetailError(e.message); } finally { setDetailLoading(false); } };
           list.appendChild(item);
         });

@@ -5,7 +5,9 @@ import {
   PARKING_LABELS,
   ELEVATOR_LABELS,
   PET_LABELS,
-  CONTRACT_TYPE_LABELS
+  CONTRACT_TYPE_LABELS,
+  LOAN_STATUS_LABELS,
+  ILLEGAL_BUILDING_STATUS_LABELS
 } from "../constants/mapListingConstants";
 
 export function formatNumber(value) {
@@ -107,7 +109,9 @@ export function formatMoveInDateDisplay(detail) {
 }
 
 export function formatDetailValue(key, value) {
-  if (["deposit", "monthlyRent", "viewCount"].includes(key)) return formatNumber(value);
+  if (["deposit", "monthlyRent", "viewCount", "maintenanceFee", "parkingCount", "totalFloors", "currentFloor", "exclusivityArea"].includes(key)) {
+    return formatNumber(value);
+  }
   if (key === "isHotProperty") return value ? "꿀매물" : "일반";
   if (key === "loanProducts") return formatLoanProducts(value);
   if (key === "roomType") return formatRoomType(value);
@@ -115,6 +119,8 @@ export function formatDetailValue(key, value) {
   if (key === "elevator") return ELEVATOR_LABELS[value] ?? value ?? "-";
   if (key === "pet") return PET_LABELS[value] ?? value ?? "-";
   if (key === "contractType") return CONTRACT_TYPE_LABELS[value] ?? value ?? "-";
+  if (key === "loanStatus") return LOAN_STATUS_LABELS[value] ?? value ?? "-";
+  if (key === "illegalBuildingStatus") return ILLEGAL_BUILDING_STATUS_LABELS[value] ?? value ?? "-";
   if (value == null) return "-";
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);

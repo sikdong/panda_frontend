@@ -65,6 +65,14 @@ export const DETAIL_KEY_LABELS = {
   moveInDate: "입주 가능일",
   deposit: "보증금",
   monthlyRent: "월세",
+  exclusivityArea: "전용면적",
+  useAprDay: "사용승인일",
+  totalFloors: "총층수",
+  currentFloor: "해당층",
+  parkingCount: "주차 가능 대수",
+  maintenanceFee: "관리비",
+  loanStatus: "융자여부",
+  illegalBuildingStatus: "위반건축물 여부",
   createdAt: "등록일시",
   updatedAt: "수정일시"
 };
@@ -90,6 +98,16 @@ export const CONTRACT_TYPE_LABELS = {
   JEONSE: "전세",
   SEMI_JEONSE: "반전세",
   MONTHLY_RENT: "월세"
+};
+
+export const LOAN_STATUS_LABELS = {
+  NONE: "없음",
+  BELOW_30: "시세 융자금 30% 미만"
+};
+
+export const ILLEGAL_BUILDING_STATUS_LABELS = {
+  NO: "X",
+  YES: "O"
 };
 
 export const DETAIL_PRIORITY_KEYS = ["address", "isHotProperty", "deposit", "monthlyRent", "viewCount", "roomType"];

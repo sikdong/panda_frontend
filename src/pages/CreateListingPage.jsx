@@ -65,6 +65,14 @@ function getImageUrl(item) {
   return "";
 }
 
+function parseOptionalNumber(value, { allowDecimal = false } = {}) {
+  const normalized = String(value ?? "").replace(/,/g, "").trim();
+  if (!normalized) return null;
+
+  const parsed = allowDecimal ? Number(normalized) : Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toFormModel(detail) {
   if (!detail || typeof detail !== "object") return DEFAULT_FORM;
   const parsedLoanProducts = Array.isArray(detail.loanProducts) && detail.loanProducts.length > 0
@@ -122,6 +130,7 @@ export default function CreateListingPage() {
   
   const [showAddressDetailModal, setShowAddressDetailModal] = useState(false);
   const [tempBaseAddress, setTempBaseAddress] = useState("");
+  const [manualBuildingName, setManualBuildingName] = useState("");
   const [localDetail, setLocalDetail] = useState("");
   const [buildingOptions, setBuildingOptions] = useState([]);
   const [selectedBuildingPk, setSelectedBuildingPk] = useState("");
@@ -196,6 +205,7 @@ export default function CreateListingPage() {
     }
     
     setTempBaseAddress(fullAddress);
+    setManualBuildingName("");
     setLocalDetail("");
     setShowAddressDetailModal(true);
     setBuildingOptions([]);
@@ -280,15 +290,17 @@ export default function CreateListingPage() {
   };
 
   const onConfirmDetailAddress = async () => {
-    const finalAddress = `${tempBaseAddress} ${localDetail.trim()}`.trim();
+    const normalizedManualBuildingName = manualBuildingName.trim();
+    const targetBuilding = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === selectedBuildingPk);
+    const selectedBuildingName = targetBuilding?.dongNm?.trim() || "";
+    const resolvedBuildingName = selectedBuildingName || normalizedManualBuildingName;
+    const finalAddress = [tempBaseAddress, resolvedBuildingName, localDetail.trim()].filter(Boolean).join(" ");
     setForm((prev) => ({ ...prev, address: finalAddress }));
     setShowAddressDetailModal(false);
 
     // 상세 주소 확정 시 전유부 조회 시도
     if (addressCodes) {
       try {
-        const targetBuilding = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === selectedBuildingPk);
-        
         // 상세 주소에서 '호' 추출 시도 (예: 202호 -> 202)
         const hoMatch = localDetail.match(/(\d+)\s*호/);
         const hoNm = hoMatch ? hoMatch[1] : localDetail.trim(); // 추출 실패 시 입력값 전체 사용
@@ -296,7 +308,7 @@ export default function CreateListingPage() {
         setStatus({ type: "idle", message: "전유부 정보 조회 중..." });
         const response = await fetchBuildingExclusivity({
           ...addressCodes,
-          dongNm: targetBuilding?.dongNm || "",
+          dongNm: resolvedBuildingName,
           hoNm: hoNm
         });
 
@@ -367,9 +379,14 @@ export default function CreateListingPage() {
         hotProperty: Boolean(form.hotProperty), 
         address: form.address.trim(), 
         note: form.note.trim(), 
-        moveInDate: form.moveInDate ? form.moveInDate.replaceAll("-", "") : null, 
+        moveInDate: form.moveInDate || null, 
         deposit: parseMoneyValue(form.deposit), 
-        monthlyRent: parseMoneyValue(form.monthlyRent) 
+        monthlyRent: parseMoneyValue(form.monthlyRent),
+        exclusivityArea: parseOptionalNumber(form.exclusivityArea, { allowDecimal: true }),
+        totalFloors: parseOptionalNumber(form.totalFloors),
+        currentFloor: parseOptionalNumber(form.currentFloor),
+        parkingCount: parseOptionalNumber(form.parkingCount),
+        maintenanceFee: parseOptionalNumber(form.maintenanceFee)
       };
 
       if (isEditMode) {
@@ -498,13 +515,26 @@ export default function CreateListingPage() {
               </div>
             )}
 
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>상세 주소 (동, 호수 등)</label>
+            {buildingOptions.length === 0 && status.message !== "건물(동) 목록 조회 중..." && (
+              <>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>동명 (수동 입력)</label>
+                <input
+                  type="text"
+                  value={manualBuildingName}
+                  onChange={(e) => setManualBuildingName(e.target.value)}
+                  placeholder="예: 101동"
+                  style={{ width: "100%", minHeight: "44px", padding: "0 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "16px", marginBottom: "16px" }}
+                />
+              </>
+            )}
+
+            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>상세 주소 (호수 등)</label>
             <input
               ref={detailInputRef}
               type="text"
               value={localDetail}
               onChange={(e) => setLocalDetail(e.target.value)}
-              placeholder="예: 101동 202호"
+              placeholder="예: 202호"
               onKeyDown={(e) => { if (e.key === "Enter") onConfirmDetailAddress(); }}
               style={{ width: "100%", minHeight: "44px", padding: "0 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "16px", marginBottom: "20px" }}
             />
