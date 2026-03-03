@@ -109,8 +109,14 @@ export function formatMoveInDateDisplay(detail) {
 }
 
 export function formatDetailValue(key, value) {
-  if (["deposit", "monthlyRent", "viewCount", "maintenanceFee", "parkingCount", "totalFloors", "currentFloor", "exclusivityArea"].includes(key)) {
+  if (["deposit", "monthlyRent", "viewCount", "totalFloors", "currentFloor", "exclusivityArea"].includes(key)) {
     return formatNumber(value);
+  }
+  if (key === "parkingCount") {
+    return value == null ? "-" : `${formatNumber(value)}대 (공부상)`;
+  }
+  if (key === "maintenanceFee") {
+    return value == null ? "-" : `${formatNumber(value)}만원 - (관리규약 등에 따라 부과)`;
   }
   if (key === "isHotProperty") return value ? "꿀매물" : "일반";
   if (key === "loanProducts") return formatLoanProducts(value);

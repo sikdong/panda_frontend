@@ -69,7 +69,7 @@ export const DETAIL_KEY_LABELS = {
   useAprDay: "사용승인일",
   totalFloors: "총층수",
   currentFloor: "해당층",
-  parkingCount: "주차 가능 대수",
+  parkingCount: "주차가능대수",
   maintenanceFee: "관리비",
   loanStatus: "융자여부",
   illegalBuildingStatus: "위반건축물 여부",
