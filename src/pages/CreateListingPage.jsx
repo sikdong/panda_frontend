@@ -41,17 +41,16 @@ const DEFAULT_FORM = {
   contractType: "JEONSE",
   roomType: "ONE_ROOM",
   loanProducts: ["HF_YOUTH"],
-  moveInOption: "NEGOTIABLE",
+  moveInType: "NEGOTIABLE",
   moveInDate: "",
   deposit: "",
   monthlyRent: "",
   // 건축물대장 필드 수정
   exclusivityArea: "",
-  useAprbDe: "",
+  useAprDay: "",
   totalFloors: "",
   currentFloor: "", // 해당층 추가
   parkingCount: "",
-  parkingAvailable: "AVAILABLE",
   // 추가 필드
   maintenanceFee: "",
   loanStatus: "NONE",
@@ -77,17 +76,17 @@ function toFormModel(detail) {
     ...detail,
     hotProperty: Boolean(detail.hotProperty),
     loanProducts: parsedLoanProducts,
-    moveInOption: detail.moveInType ?? detail.moveInOption ?? DEFAULT_FORM.moveInOption,
+    moveInType: detail.moveInType ?? DEFAULT_FORM.moveInType,
     moveInDate: normalizeDateValue(detail.moveInDate),
     deposit: formatMoneyInput(detail.deposit),
     monthlyRent: formatMoneyInput(detail.monthlyRent),
     // 건축물대장 정보 매핑
     exclusivityArea: detail.exclusivityArea ?? "",
-    useAprbDe: formatDateString(detail.useAprbDe) ?? "",
+    useAprDay: formatDateString(detail.useAprDay) ?? "",
     totalFloors: detail.totalFloors ?? "",
     currentFloor: detail.currentFloor ?? "",
     parkingCount: detail.parkingCount ?? "",
-    parkingAvailable: detail.parkingAvailable ?? DEFAULT_FORM.parkingAvailable,
+    parking: detail.parking ?? DEFAULT_FORM.parking,
     // 추가 필드 매핑
     maintenanceFee: formatMoneyInput(detail.maintenanceFee),
     loanStatus: detail.loanStatus ?? DEFAULT_FORM.loanStatus,
@@ -172,16 +171,16 @@ export default function CreateListingPage() {
       const nextForm = {
         ...prev,
         [name]: value,
-        ...(name === "moveInOption" && value === "IMMEDIATE" ? { moveInDate: "" } : {})
+        ...(name === "moveInType" && value === "IMMEDIATE" ? { moveInDate: "" } : {})
       };
 
       // 주차가능대수가 0보다 크면 '가능', 0이면 '불가'로 자동 변경
       if (name === "parkingCount") {
         const count = Number(value) || 0;
         if (count > 0) {
-          nextForm.parkingAvailable = "AVAILABLE";
+          nextForm.parking = "AVAILABLE";
         } else {
-          nextForm.parkingAvailable = "UNAVAILABLE";
+          nextForm.parking = "UNAVAILABLE";
         }
       }
 
@@ -239,10 +238,10 @@ export default function CreateListingPage() {
           setSelectedBuildingPk(target.mgmBldrgstPk || target.dongNm);
           setForm(prev => ({
             ...prev,
-            useAprbDe: formatDateString(target.useAprDay) || "",
+            useAprDay: formatDateString(target.useAprDay) || "",
             totalFloors: target.grndFlrCnt || "",
             parkingCount: target.parkingCount || "",
-            parkingAvailable: target.parkingAvailable ? "AVAILABLE" : "UNAVAILABLE"
+            parking: target.parking ? "AVAILABLE" : "UNAVAILABLE"
           }));
           setStatus({ type: "success", message: "건축물 정보를 자동으로 입력했습니다." });
         } else if (items.length > 1) {
@@ -272,10 +271,10 @@ export default function CreateListingPage() {
     if (target) {
       setForm(prev => ({
         ...prev,
-        useAprbDe: formatDateString(target.useAprDay) || "",
+        useAprDay: formatDateString(target.useAprDay) || "",
         totalFloors: target.grndFlrCnt || "",
         parkingCount: target.parkingCount || "",
-        parkingAvailable: target.parkingAvailable ? "AVAILABLE" : "UNAVAILABLE"
+        parking: target.parking ? "AVAILABLE" : "UNAVAILABLE"
       }));
     }
   };
@@ -358,14 +357,13 @@ export default function CreateListingPage() {
     e.preventDefault();
     if (!form.address.trim()) return setStatus({ type: "error", message: "주소를 입력해주세요." });
     if (!isValidDate) return setStatus({ type: "error", message: "입주 가능일 형식을 확인해주세요." });
-    if (form.moveInOption === "FIXED" && !form.moveInDate) return setStatus({ type: "error", message: "고정 선택 시 입주 가능일이 필요합니다." });
+    if (form.moveInType === "FIXED" && !form.moveInDate) return setStatus({ type: "error", message: "고정 선택 시 입주 가능일이 필요합니다." });
     if (form.loanProducts.length === 0) return setStatus({ type: "error", message: "대출상품을 최소 1개 이상 선택해주세요." });
 
     setLoading(true); setStatus({ type: "idle", message: "" });
     try {
       const listingPayload = { 
         ...form, 
-        moveInType: form.moveInOption, 
         hotProperty: Boolean(form.hotProperty), 
         address: form.address.trim(), 
         note: form.note.trim(), 
@@ -441,8 +439,8 @@ export default function CreateListingPage() {
           </fieldset>
 
           <div style={{ display: "grid", gridColumn: "1 / -1", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <label>입주 옵션 <select name="moveInOption" value={form.moveInOption} onChange={onChange}><option value="NEGOTIABLE">협의필요</option><option value="FIXED">지정날짜 </option><option value="IMMEDIATE">공실(즉시입주)</option></select></label>
-            {form.moveInOption !== "IMMEDIATE" && <label>입주 가능일 <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} /></label>}
+            <label>입주 옵션 <select name="moveInType" value={form.moveInType} onChange={onChange}><option value="NEGOTIABLE">협의필요</option><option value="FIXED">지정날짜 </option><option value="IMMEDIATE">공실(즉시입주)</option></select></label>
+            {form.moveInType !== "IMMEDIATE" && <label>입주 가능일 <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} /></label>}
           </div>
 
           <label>보증금 <input name="deposit" type="text" inputMode="numeric" value={form.deposit} onChange={onMoneyChange} required /></label>
