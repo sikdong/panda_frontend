@@ -10,7 +10,7 @@ import { DETAIL_PRIORITY_KEYS } from "../../constants/mapListingConstants";
 function sortDetailEntries(detail) {
   if (!detail || typeof detail !== "object") return [];
   const entries = Object.entries(detail).filter(([key]) =>
-    !["imagePaths", "imageFilePaths", "address", "isHotProperty", "hotProperty", "moveInType", "moveInTypeLabel"].includes(key)
+    !["imagePaths", "imageFilePaths", "address", "description", "isHotProperty", "hotProperty", "moveInType", "moveInTypeLabel"].includes(key)
   );
   if (!entries.some(([k]) => k === "moveInDate") && (detail.moveInType != null || detail.moveInTypeLabel != null)) {
     entries.push(["moveInDate", detail.moveInDate ?? null]);

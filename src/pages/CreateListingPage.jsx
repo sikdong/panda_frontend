@@ -475,12 +475,12 @@ export default function CreateListingPage() {
           </label>
 
           <label style={{ gridColumn: "1 / -1" }}>
-            설명
+            메모
             <textarea
               name="description"
               value={form.description}
               onChange={onChange}
-              placeholder="매물 설명을 입력해주세요"
+              placeholder="관리자용 메모"
               rows={8}
               style={{ minHeight: "220px", fontSize: "16px", lineHeight: 1.6, padding: "12px" }}
             />
