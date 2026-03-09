@@ -48,6 +48,10 @@ export function fetchListingSummaries() {
   return request("/api/v1/listings/summaries");
 }
 
+export function fetchAdminListings() {
+  return request("/api/v1/listings/admin");
+}
+
 export function fetchUnsoldListings() {
   return request("/api/v1/listings/unsold");
 }

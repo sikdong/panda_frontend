@@ -48,6 +48,11 @@ export default function AdminListingItem({ listing, busy, onToggleCompleted, onD
           </button>
         </div>
       </div>
+      {listing.description?.trim() && (
+        <div style={{ whiteSpace: "pre-line", color: "#3b4540", lineHeight: 1.5 }}>
+          {listing.description}
+        </div>
+      )}
     </li>
   );
 }

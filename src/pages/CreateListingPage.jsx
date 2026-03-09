@@ -35,6 +35,7 @@ const DEFAULT_FORM = {
   address: "",
   hotProperty: false,
   note: "",
+  description: "",
   parking: "AVAILABLE",
   elevator: "YES",
   pet: "AVAILABLE",
@@ -379,6 +380,7 @@ export default function CreateListingPage() {
         hotProperty: Boolean(form.hotProperty), 
         address: form.address.trim(), 
         note: form.note.trim(), 
+        description: form.description.trim(),
         moveInDate: form.moveInDate || null, 
         deposit: parseMoneyValue(form.deposit), 
         monthlyRent: parseMoneyValue(form.monthlyRent),
@@ -470,6 +472,18 @@ export default function CreateListingPage() {
             <input type="file" accept="image/*" multiple onChange={onImageFilesChange} />
             <ImagePreviewList title="기존 이미지" images={existingImages} onRemove={removeExistingImage} onOpenViewer={setViewerImageUrl} />
             <ImagePreviewList title="새 이미지" images={newImageFiles} onRemove={removeNewImage} onOpenViewer={setViewerImageUrl} />
+          </label>
+
+          <label style={{ gridColumn: "1 / -1" }}>
+            설명
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={onChange}
+              placeholder="매물 설명을 입력해주세요"
+              rows={8}
+              style={{ minHeight: "220px", fontSize: "16px", lineHeight: 1.6, padding: "12px" }}
+            />
           </label>
 
           <button type="submit" disabled={loading}>{loading ? (isEditMode ? "수정 중.." : "등록 중..") : (isEditMode ? "매물 수정하기" : "매물 등록하기")}</button>
