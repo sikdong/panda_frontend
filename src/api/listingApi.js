@@ -40,7 +40,7 @@ async function request(path, options = {}) {
 export function createListing(payload) {
   return request("/api/v1/listings", {
     method: "POST",
-    body: payload instanceof FormData ? payload : JSON.stringify(payload)
+    body: JSON.stringify(payload)
   });
 }
 
@@ -82,8 +82,52 @@ export function deleteListing(listingId) {
 export function updateListing(listingId, payload) {
   return request(`/api/v1/listings/${listingId}`, {
     method: "PATCH",
-    body: payload instanceof FormData ? payload : JSON.stringify(payload)
+    body: JSON.stringify(payload)
   });
+}
+
+export function requestUploadUrls(files) {
+  return request("/api/v1/uploads/presigned-urls", {
+    method: "POST",
+    body: JSON.stringify({
+      files: files.map((file) => ({
+        fileName: file.fileName,
+        originalFileName: file.fileName,
+        contentType: file.contentType,
+        fileType: file.contentType,
+        size: file.size,
+        contentLength: file.size
+      }))
+    })
+  });
+}
+
+export async function uploadToS3(putUrl, file, { timeoutMs = 30000 } = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream"
+      },
+      body: file,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "S3 업로드에 실패했습니다.");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("이미지 업로드 시간이 초과되었습니다.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export function fetchBuildingLedger(params) {

@@ -4,6 +4,7 @@ import { useDaumPostcodePopup } from "react-daum-postcode";
 import { 
   createListing, 
   fetchListingEditDetail, 
+  requestUploadUrls,
   updateListing, 
   fetchBuildingTitles, 
   fetchBuildingExclusivity 
@@ -14,6 +15,12 @@ import {
   normalizeDateValue,
   formatDateString,
 } from "../utils/listingUtils";
+import {
+  normalizeUploadTargets,
+  prepareImageFiles,
+  uploadFilesInBatches,
+  validateImageFiles
+} from "../utils/imageUpload";
 import BuildingLedgerFields from "../components/ListingForm/BuildingLedgerFields";
 import ImagePreviewList from "../components/ListingForm/ImagePreviewList";
 
@@ -128,6 +135,7 @@ export default function CreateListingPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
   const [viewerImageUrl, setViewerImageUrl] = useState("");
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   
   const [showAddressDetailModal, setShowAddressDetailModal] = useState(false);
   const [tempBaseAddress, setTempBaseAddress] = useState("");
@@ -150,6 +158,7 @@ export default function CreateListingPage() {
     if (!isEditMode) {
       setInitialLoading(false); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]);
       setNewImageFiles((prev) => { prev.forEach((item) => URL.revokeObjectURL(item.previewUrl)); return []; });
+      setUploadProgress({ done: 0, total: 0 });
       setStatus({ type: "idle", message: "" });
       return;
     }
@@ -240,7 +249,6 @@ export default function CreateListingPage() {
           items = Array.isArray(resData.items.item) ? resData.items.item : [resData.items.item];
         }
         
-        console.log("Fetched Building List:", items);
         setBuildingOptions(items);
 
         if (items.length === 1) {
@@ -272,12 +280,9 @@ export default function CreateListingPage() {
     setSelectedBuildingPk(pk);
     if (!pk) return;
 
-    console.log("Searching for PK/Name:", pk);
-    console.log("In Options:", buildingOptions);
 
     // mgmBldrgstPk 또는 dongNm으로 매칭 시도
     const target = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === pk);
-    console.log("Selected building info (Target):", target);
 
     if (target) {
       setForm(prev => ({
@@ -314,14 +319,11 @@ export default function CreateListingPage() {
         });
 
         const resData = response?.data ?? response;
-        console.log("Exclusivity Response:", resData);
 
         // 제공해주신 데이터 구조: items.item[0].area 매핑
         const rawItem = resData?.items?.item;
         const targetItem = Array.isArray(rawItem) ? rawItem[0] : rawItem;
         
-        console.log("Target Exclusivity Item:", targetItem);
-
         const areaValue = targetItem?.area || resData?.exclusivityArea || resData?.area;
         const floorValue = targetItem?.flrNo;
         
@@ -375,6 +377,17 @@ export default function CreateListingPage() {
 
     setLoading(true); setStatus({ type: "idle", message: "" });
     try {
+      const sourceFiles = newImageFiles.map((item) => item.file);
+      validateImageFiles(sourceFiles);
+
+      let visibleNewFiles = sourceFiles;
+      if (sourceFiles.length > 0) {
+        setStatus({ type: "idle", message: `이미지 전처리 중... (0/${sourceFiles.length})` });
+        visibleNewFiles = await prepareImageFiles(sourceFiles, (done, total) => {
+          setStatus({ type: "idle", message: `이미지 전처리 중... (${done}/${total})` });
+        });
+      }
+
       const listingPayload = { 
         ...form, 
         hotProperty: Boolean(form.hotProperty), 
@@ -391,27 +404,50 @@ export default function CreateListingPage() {
         maintenanceFee: parseOptionalNumber(form.maintenanceFee)
       };
 
+      let uploadedKeys = [];
+      if (visibleNewFiles.length > 0) {
+        setUploadProgress({ done: 0, total: visibleNewFiles.length });
+        setStatus({ type: "idle", message: `이미지 업로드 준비 중... (0/${visibleNewFiles.length})` });
+
+        const uploadTargetResponse = await requestUploadUrls(
+          visibleNewFiles.map((file) => ({
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            size: file.size
+          }))
+        );
+        const uploadTargets = normalizeUploadTargets(uploadTargetResponse);
+
+        if (uploadTargets.length !== visibleNewFiles.length || uploadTargets.some((item) => !item.key || !item.putUrl)) {
+          throw new Error("업로드 URL 발급 응답이 올바르지 않습니다.");
+        }
+
+        let completedUploads = 0;
+        uploadedKeys = await uploadFilesInBatches(
+          visibleNewFiles.map((file, index) => ({ file, target: uploadTargets[index] })),
+          () => {
+            completedUploads += 1;
+            setUploadProgress({ done: completedUploads, total: visibleNewFiles.length });
+            setStatus({ type: "idle", message: `이미지 업로드 중... (${completedUploads}/${visibleNewFiles.length})` });
+          }
+        );
+      }
+
       if (isEditMode) {
-        const visibleNewFiles = newImageFiles.map((i) => i.file);
-        const retainedPaths = serverImagePaths.filter((p) => p != null);
-        listingPayload.imagePaths = serverImagePaths;
-        if (retainedPaths.length > 0 || visibleNewFiles.length > 0) {
-          const fd = new FormData();
-          fd.append("listing", new Blob([JSON.stringify(listingPayload)], { type: "application/json" }));
-          visibleNewFiles.forEach((f) => fd.append("images", f));
-          await updateListing(listingId, fd);
-        } else await updateListing(listingId, listingPayload);
+        listingPayload.imagePaths = [...serverImagePaths.filter((path) => path != null), ...uploadedKeys];
+        await updateListing(listingId, listingPayload);
         navigate("/admin/listings", { replace: true });
       } else {
-        if (newImageFiles.length > 0) {
-          const fd = new FormData();
-          fd.append("listing", new Blob([JSON.stringify(listingPayload)], { type: "application/json" }));
-          newImageFiles.forEach((i) => fd.append("images", i.file));
-          await createListing(fd);
-        } else await createListing(listingPayload);
+        listingPayload.imagePaths = uploadedKeys;
+        await createListing(listingPayload);
         setStatus({ type: "success", message: "매물을 등록했습니다." }); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]); setNewImageFiles((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
+        setUploadProgress({ done: 0, total: 0 });
       }
-    } catch (err) { setStatus({ type: "error", message: err.details?.errorType === "INPUT_ERROR" ? "입력값을 확인해주세요." : "서버 오류가 발생했습니다." }); } finally { setLoading(false); }
+    } catch (err) {
+      setStatus({ type: "error", message: err.message ?? (err.details?.errorType === "INPUT_ERROR" ? "입력값을 확인해주세요." : "서버 오류가 발생했습니다.") });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -500,6 +536,7 @@ export default function CreateListingPage() {
       )}
 
       {status.type !== "idle" && <p className={`status ${status.type}`}>{status.message}</p>}
+      {loading && uploadProgress.total > 0 && <p className="status">이미지 업로드 진행률: {uploadProgress.done}/{uploadProgress.total}</p>}
 
       {showAddressDetailModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", padding: 16 }}>
