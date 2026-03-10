@@ -157,8 +157,11 @@
 - Verify env var usage for map/API flows still matches README.
 - If lint/test/typecheck are requested, first add and document tooling.
 
-## Maintenance Notes
-- Update this file whenever scripts or tooling change.
-- Keep command examples exact and runnable.
-- If Cursor/Copilot rule files are added later, mirror them here.
-- If `AGENT.md` changes, sync relevant constraints into this file.
+# AGENT Rules
+- Do not insert the literal `r`n token into code. Use actual newlines only (LF/CRLF).
+- Skip running `npm run build`.
+- Any file that may include Korean text (`.html`, `.js`, `.jsx`, `.css`, `.md`) must be saved as UTF-8.
+- Prefer `apply_patch` for edits. Do not use overwrite commands that can change encoding (for example `Set-Content` or `Out-File`) unless explicitly required.
+- After editing files that contain Korean text, immediately reopen and verify the Korean strings are intact.
+
+
