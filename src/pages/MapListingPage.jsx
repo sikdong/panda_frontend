@@ -22,6 +22,7 @@ import {
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
+const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL" });
 
 function createMarkerIconContent(count, selected, hasHot) {
   return `<div class="panda-marker${selected ? " selected" : ""}">
@@ -50,10 +51,10 @@ function clampSheetDragOffset(current, deltaY) {
   return Math.min(maxDown, Math.max(-maxUp, deltaY));
 }
 
-function matchesListingFilters(listing, region, roomType, loanFilter) {
+function matchesListingFilters(listing, region, roomTypes, loanFilter) {
   const address = String(listing?.address ?? "").toLowerCase();
   const regionMatched = !region || address.includes(region);
-  const roomMatched = roomType === "ALL" || listing?.roomType === roomType;
+  const roomMatched = !Array.isArray(roomTypes) || roomTypes.length === 0 || roomTypes.includes(listing?.roomType);
   const products = listing?.loanProducts || [];
   const loanMatched = loanFilter === "ALL" || (loanFilter === "TYPE_126" ? products.some(p => LOAN_126_PRODUCTS.has(p)) : (loanFilter === "INSURANCE_AVAILABLE" ? products.some(p => INSURANCE_AVAILABLE_PRODUCTS.has(p)) : true));
   return regionMatched && roomMatched && loanMatched;
@@ -74,8 +75,8 @@ export default function MapListingPage() {
   const [sheetDragOffset, setSheetDragOffset] = useState(0);
   const [isSheetDragging, setIsSheetDragging] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({ region: "", roomType: "ALL", loanFilter: "ALL" });
-  const [draftFilters, setDraftFilters] = useState(filters);
+  const [filters, setFilters] = useState(createDefaultFilters);
+  const [draftFilters, setDraftFilters] = useState(createDefaultFilters);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isTopPhotoVisible, setIsTopPhotoVisible] = useState(true);
 
@@ -87,7 +88,7 @@ export default function MapListingPage() {
   const sheetStartYRef = useRef(0);
   const photoSwipeStartXRef = useRef(null);
 
-  const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, filters.region.trim().toLowerCase(), filters.roomType, filters.loanFilter)), [listings, filters]);
+  const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, filters.region.trim().toLowerCase(), filters.roomTypes, filters.loanFilter)), [listings, filters]);
   const groupedCoordinates = useMemo(() => {
     const grouped = new Map();
     filteredListings.filter(l => l.latitude != null && l.longitude != null).forEach(l => {
@@ -170,7 +171,20 @@ export default function MapListingPage() {
   }, [selectedGroupKey, groupedCoordinates]);
 
   const closeDetails = () => { setSelectedListingId(null); setSelectedListingDetail(null); setDetailError(""); setSheetMode("closed"); setSelectedGroupKey(null); };
-  const applyFilters = () => { setFilters(draftFilters); setIsFilterOpen(false); if (mapInstanceRef.current) { const first = listings.find(l => matchesListingFilters(l, draftFilters.region.trim().toLowerCase(), draftFilters.roomType, draftFilters.loanFilter)); if (first) mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(first.latitude, first.longitude)); } };
+  const applyFilters = () => {
+    setFilters({ ...draftFilters, roomTypes: [...draftFilters.roomTypes] });
+    setIsFilterOpen(false);
+    if (mapInstanceRef.current) {
+      const first = listings.find(l => matchesListingFilters(l, draftFilters.region.trim().toLowerCase(), draftFilters.roomTypes, draftFilters.loanFilter));
+      if (first) mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(first.latitude, first.longitude));
+    }
+  };
+  const onDraftRoomTypeToggle = (roomType) => {
+    setDraftFilters((prev) => {
+      const exists = prev.roomTypes.includes(roomType);
+      return { ...prev, roomTypes: exists ? prev.roomTypes.filter(type => type !== roomType) : [...prev.roomTypes, roomType] };
+    });
+  };
   const showPreviousPhoto = () => setPhotoIndex((p) => (p - 1 + detailImageUrls.length) % detailImageUrls.length);
   const showNextPhoto = () => setPhotoIndex((p) => (p + 1) % detailImageUrls.length);
   const onPhotoPointerDown = (e) => {
@@ -201,7 +215,7 @@ export default function MapListingPage() {
       <div ref={mapRef} className="map-canvas" />
       <div className="map-overlay-stack top-left">
         <div className="map-overlay-card">매물 {filteredListings.length}건</div>
-        <button type="button" className="link-button" onClick={() => { setDraftFilters(filters); setIsFilterOpen(true); }}>필터</button>
+        <button type="button" className="link-button" onClick={() => { setDraftFilters({ ...filters, roomTypes: [...filters.roomTypes] }); setIsFilterOpen(true); }}>필터</button>
       </div>
 
       {!detailLoading && selectedListingId && detailImageUrls.length > 0 && isTopPhotoVisible && (
@@ -303,10 +317,20 @@ export default function MapListingPage() {
             <div className="filter-viewer-head"><strong>필터</strong><button type="button" onClick={() => setIsFilterOpen(false)}>×</button></div>
             <div className="filter-viewer-body">
               <label className="filter-field"><span>지역</span><input type="text" value={draftFilters.region} onChange={e => setDraftFilters(p => ({ ...p, region: e.target.value }))} placeholder="주소 검색" /></label>
-              <label className="filter-field"><span>방 타입</span><select value={draftFilters.roomType} onChange={e => setDraftFilters(p => ({ ...p, roomType: e.target.value }))}>{ROOM_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+              <div className="filter-field">
+                <span>방 타입</span>
+                <div className="filter-checkbox-group">
+                  {ROOM_TYPE_OPTIONS.filter(option => option.value !== "ALL").map(option => (
+                    <label key={option.value} className="filter-checkbox-item">
+                      <input type="checkbox" checked={draftFilters.roomTypes.includes(option.value)} onChange={() => onDraftRoomTypeToggle(option.value)} />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <label className="filter-field"><span>대출 타입</span><select value={draftFilters.loanFilter} onChange={e => setDraftFilters(p => ({ ...p, loanFilter: e.target.value }))}>{LOAN_FILTER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
             </div>
-            <div className="filter-viewer-actions"><button type="button" onClick={() => setDraftFilters({ region: "", roomType: "ALL", loanFilter: "ALL" })}>초기화</button><button type="button" onClick={applyFilters}>적용</button></div>
+            <div className="filter-viewer-actions"><button type="button" onClick={() => setDraftFilters(createDefaultFilters())}>초기화</button><button type="button" onClick={applyFilters}>적용</button></div>
           </section>
         </div>
       )}

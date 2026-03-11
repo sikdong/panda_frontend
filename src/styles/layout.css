@@ -460,13 +460,45 @@
   line-height: 1.25;
 }
 
-.filter-field input,
+.filter-field input[type="text"],
 .filter-field select {
   min-height: 40px;
   border: 1px solid #cfd9d3;
   border-radius: 10px;
   padding: 0 10px;
   font-size: 14px;
+}
+
+.filter-checkbox-group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.filter-checkbox-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.filter-checkbox-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.filter-checkbox-item span {
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .filter-viewer-actions {
