@@ -86,10 +86,11 @@ export function updateListing(listingId, payload) {
   });
 }
 
-export function requestUploadUrls(files) {
-  return request("/api/v1/uploads/presigned-urls", {
+export function requestUploadUrls(listingId, files) {
+  return request("/api/v1/images/presigned-urls", {
     method: "POST",
     body: JSON.stringify({
+      listingId,
       files: files.map((file) => ({
         fileName: file.fileName,
         originalFileName: file.fileName,

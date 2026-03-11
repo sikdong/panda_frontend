@@ -121,6 +121,13 @@ function toExistingImages(detail) {
     .filter((item) => Boolean(item.url));
 }
 
+function extractListingId(response) {
+  const rawData = response?.data ?? response;
+  const candidate = rawData?.id ?? rawData?.listingId ?? response?.id ?? response?.listingId;
+  const parsed = Number(candidate);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export default function CreateListingPage() {
   const { listingId } = useParams();
   const navigate = useNavigate();
@@ -404,12 +411,29 @@ export default function CreateListingPage() {
         maintenanceFee: parseOptionalNumber(form.maintenanceFee)
       };
 
+      let targetListingId = isEditMode ? Number(listingId) : null;
+      if (isEditMode && (!Number.isInteger(targetListingId) || targetListingId <= 0)) {
+        throw new Error("유효한 매물 ID를 확인하지 못했습니다.");
+      }
+
+      if (!isEditMode && visibleNewFiles.length > 0) {
+        const createResponse = await createListing({ ...listingPayload, imagePaths: [] });
+        targetListingId = extractListingId(createResponse);
+        if (!targetListingId) {
+          throw new Error("생성된 매물 ID를 확인하지 못했습니다.");
+        }
+      }
+
       let uploadedKeys = [];
       if (visibleNewFiles.length > 0) {
+        if (!targetListingId) {
+          throw new Error("이미지 업로드 대상 매물 ID가 없습니다.");
+        }
         setUploadProgress({ done: 0, total: visibleNewFiles.length });
         setStatus({ type: "idle", message: `이미지 업로드 준비 중... (0/${visibleNewFiles.length})` });
 
         const uploadTargetResponse = await requestUploadUrls(
+          targetListingId,
           visibleNewFiles.map((file) => ({
             fileName: file.name,
             contentType: file.type || "application/octet-stream",
@@ -435,11 +459,15 @@ export default function CreateListingPage() {
 
       if (isEditMode) {
         listingPayload.imagePaths = [...serverImagePaths.filter((path) => path != null), ...uploadedKeys];
-        await updateListing(listingId, listingPayload);
+        await updateListing(targetListingId, listingPayload);
         navigate("/admin/listings", { replace: true });
       } else {
-        listingPayload.imagePaths = uploadedKeys;
-        await createListing(listingPayload);
+        if (targetListingId) {
+          await updateListing(targetListingId, { imagePaths: uploadedKeys });
+        } else {
+          listingPayload.imagePaths = [];
+          await createListing(listingPayload);
+        }
         setStatus({ type: "success", message: "매물을 등록했습니다." }); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]); setNewImageFiles((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
         setUploadProgress({ done: 0, total: 0 });
       }
