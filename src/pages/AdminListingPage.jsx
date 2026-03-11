@@ -77,7 +77,9 @@ export default function AdminListingPage() {
     <section className="panel">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>관리자 매물 목록</h2>
-        <Link to="/" className="link-button">지도로 가기</Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to="/" className="link-button">지도로 가기</Link>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <input

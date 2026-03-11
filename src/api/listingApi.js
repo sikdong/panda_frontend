@@ -3,6 +3,7 @@
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
     headers: isFormData
       ? { ...(options.headers ?? {}) }
       : {
@@ -144,4 +145,9 @@ export function fetchBuildingTitles(params) {
 export function fetchBuildingExclusivity(params) {
   const query = new URLSearchParams(params).toString();
   return request(`/api/v1/listings/building-ledger/exclusivity?${query}`);
+}
+
+export function fetchAdminDauMetrics(params) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/api/v1/admin/metrics/dau?${query}`);
 }
