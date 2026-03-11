@@ -78,6 +78,7 @@ export default function AdminListingPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>관리자 매물 목록</h2>
         <div style={{ display: "flex", gap: 8 }}>
+          <Link to="/admin/dau" className="link-button">DAU 보기</Link>
           <Link to="/" className="link-button">지도로 가기</Link>
         </div>
       </div>
