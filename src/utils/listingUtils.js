@@ -59,6 +59,10 @@ export function getHotPropertyValue(item) {
   return Boolean(item?.isHotProperty ?? item?.hotProperty ?? false);
 }
 
+export function getRecentlyRegisteredValue(item) {
+  return Boolean(item?.recentlyRegistered ?? false);
+}
+
 export function getSoldValue(listing) {
   return Boolean(listing?.isSold ?? listing?.sold ?? listing?.saleCompleted ?? false);
 }

@@ -3,14 +3,15 @@ import {
   formatDetailKey,
   formatDetailValue,
   formatMoveInDateDisplay,
-  getHotPropertyValue
+  getHotPropertyValue,
+  getRecentlyRegisteredValue
 } from "../../utils/listingUtils";
 import { DETAIL_PRIORITY_KEYS } from "../../constants/mapListingConstants";
 
 function sortDetailEntries(detail) {
   if (!detail || typeof detail !== "object") return [];
   const entries = Object.entries(detail).filter(([key]) =>
-    !["imagePaths", "imageFilePaths", "address", "description", "isHotProperty", "hotProperty", "moveInType", "moveInTypeLabel"].includes(key)
+    !["imagePaths", "imageFilePaths", "address", "description", "isHotProperty", "hotProperty", "recentlyRegistered", "moveInType", "moveInTypeLabel"].includes(key)
   );
   if (!entries.some(([k]) => k === "moveInDate") && (detail.moveInType != null || detail.moveInTypeLabel != null)) {
     entries.push(["moveInDate", detail.moveInDate ?? null]);
@@ -26,6 +27,7 @@ export default function ListingDetailContent({ detail, loading, error }) {
   const detailEntries = useMemo(() => sortDetailEntries(detail), [detail]);
   const address = detail?.address ?? "주소 정보 없음";
   const isHot = getHotPropertyValue(detail);
+  const isNew = getRecentlyRegisteredValue(detail);
 
   if (loading) return <div className="map-side-empty">상세 정보를 불러오는 중...</div>;
   if (error) return <div className="map-side-empty">오류: {error}</div>;
@@ -37,7 +39,12 @@ export default function ListingDetailContent({ detail, loading, error }) {
         <div className="map-detail-title-wrap">
           <strong>매물 상세</strong>
           <div className="map-detail-address-row">{address}</div>
-          {isHot && <div className="map-detail-badge-row"><span className="hot-property-badge">🍯 꿀매물</span></div>}
+          {(isNew || isHot) && (
+            <div className="map-detail-badge-row">
+              {isNew && <span className="listing-new-badge">NEW</span>}
+              {isHot && <span className="hot-property-badge">🍯 꿀매물</span>}
+            </div>
+          )}
         </div>
       </div>
       <div className="map-detail-body">

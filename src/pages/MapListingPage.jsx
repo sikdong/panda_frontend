@@ -17,6 +17,7 @@ import {
   formatLoanProducts,
   getListingId,
   getHotPropertyValue,
+  getRecentlyRegisteredValue,
   extractImageUrls
 } from "../utils/listingUtils";
 
@@ -24,9 +25,10 @@ const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
 const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL" });
 
-function createMarkerIconContent(count, selected, hasHot) {
+function createMarkerIconContent(count, selected, hasHot, hasRecent) {
   return `<div class="panda-marker${selected ? " selected" : ""}">
     <span class="panda-marker-count">${count}</span>
+    ${hasRecent ? `<span class="panda-marker-new-wrap${hasHot ? " has-hot" : ""}"><span class="panda-marker-new-label">NEW</span></span>` : ""}
     ${hasHot ? '<span class="panda-marker-hot-wrap"><span class="panda-marker-hot-label"><span class="panda-marker-hot-label-line">🍯꿀매물🍯</span></span></span>' : ""}
   </div>`;
 }
@@ -97,7 +99,13 @@ export default function MapListingPage() {
       current.listings.push(l); current.count += 1; current.latitudeSum += Number(l.latitude); current.longitudeSum += Number(l.longitude);
       grouped.set(key, current);
     });
-    return Array.from(grouped.values()).map(g => ({ ...g, latitude: g.latitudeSum / g.count, longitude: g.longitudeSum / g.count, hasHotProperty: g.listings.some(l => getHotPropertyValue(l)) }));
+    return Array.from(grouped.values()).map(g => ({
+      ...g,
+      latitude: g.latitudeSum / g.count,
+      longitude: g.longitudeSum / g.count,
+      hasHotProperty: g.listings.some(l => getHotPropertyValue(l)),
+      hasRecentlyRegistered: g.listings.some(l => getRecentlyRegisteredValue(l))
+    }));
   }, [filteredListings]);
 
   const detailImageUrls = useMemo(() => extractImageUrls(selectedListingDetail), [selectedListingDetail]);
@@ -135,17 +143,18 @@ export default function MapListingPage() {
     const map = mapInstanceRef.current; const nm = naverMapsRef.current;
     markersRef.current.forEach(m => m.marker.setMap(null));
     markersRef.current = groupedCoordinates.map(g => {
-      const marker = new nm.Marker({ map, position: new nm.LatLng(g.latitude, g.longitude), icon: { content: createMarkerIconContent(g.count, false, g.hasHotProperty), anchor: new nm.Point(16, 16) } });
+      const marker = new nm.Marker({ map, position: new nm.LatLng(g.latitude, g.longitude), icon: { content: createMarkerIconContent(g.count, false, g.hasHotProperty, g.hasRecentlyRegistered), anchor: new nm.Point(16, 16) } });
       nm.Event.addListener(marker, "click", () => {
         setSelectedGroupKey(g.key); map.panTo(new nm.LatLng(g.latitude, g.longitude));
         const div = document.createElement("div"); div.className = "panda-infowindow";
-        div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><strong>${g.count}건${g.hasHotProperty ? " · 꿀매물 포함" : ""}</strong><button id="iw-close">×</button></div><div id="iw-list" style="height:220px;overflow-y:auto"></div>`;
+        div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><strong>${g.count}건${g.hasHotProperty ? " · 꿀매물 포함" : ""}${g.hasRecentlyRegistered ? " · NEW 포함" : ""}</strong><button id="iw-close">×</button></div><div id="iw-list" style="height:220px;overflow-y:auto"></div>`;
         div.querySelector("#iw-close").onclick = () => { infoWindowRef.current.close(); setSelectedGroupKey(null); };
         const list = div.querySelector("#iw-list");
         g.listings.forEach(listing => {
           const lId = getListingId(listing); const item = document.createElement("button"); item.style.cssText = "width:100%;margin-top:6px;text-align:left;border:1px solid #d9e2dc;border-radius:8px;background:#ffffff;padding:8px;cursor:pointer";
           item.innerHTML = `
         <div style="font-weight:700; margin-bottom:4px;">${listing.address ?? "주소 정보 없음"}</div>
+        ${getRecentlyRegisteredValue(listing) ? '<div style="margin-bottom:4px;"><span class="listing-new-badge">NEW</span></div>' : ""}
         ${getHotPropertyValue(listing) ? '<div style="margin-bottom:4px;"><span class="hot-property-badge">🍯 꿀매물</span></div>' : ""}
         <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
         <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
@@ -166,7 +175,7 @@ export default function MapListingPage() {
     if (!naverMapsRef.current) return;
     markersRef.current.forEach(m => {
       const g = groupedCoordinates.find(gc => gc.key === m.key);
-      if (g) m.marker.setIcon({ content: createMarkerIconContent(g.count, m.key === selectedGroupKey, g.hasHotProperty), anchor: new naverMapsRef.current.Point(16, 16) });
+      if (g) m.marker.setIcon({ content: createMarkerIconContent(g.count, m.key === selectedGroupKey, g.hasHotProperty, g.hasRecentlyRegistered), anchor: new naverMapsRef.current.Point(16, 16) });
     });
   }, [selectedGroupKey, groupedCoordinates]);
 
