@@ -460,15 +460,97 @@
 .filter-field span {
   display: block;
   line-height: 1.25;
+  font-size: 15px;
+}
+
+.filter-field-hint {
+  color: #66736b;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .filter-field input[type="text"],
 .filter-field select {
+  width: 100%;
+  box-sizing: border-box;
   min-height: 40px;
   border: 1px solid #cfd9d3;
   border-radius: 10px;
   padding: 0 10px;
   font-size: 14px;
+}
+
+.filter-range-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-range-row input.active {
+  border-color: #2f7e55;
+  background: #f3fbf6;
+  box-shadow: 0 0 0 1px rgba(47, 126, 85, 0.12);
+}
+
+.filter-range-separator {
+  color: #66736b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.filter-error-message {
+  border-radius: 10px;
+  background: #fff1ef;
+  color: #b33024;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filter-preset-block {
+  display: grid;
+  gap: 6px;
+}
+
+.filter-preset-label {
+  color: #66736b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filter-preset-group {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.filter-preset-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.filter-preset-chip {
+  min-height: 36px;
+  width: 100%;
+  border: 1px solid #cfd9d3;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0 6px;
+  color: #2d3832;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-preset-chip.active {
+  border-color: #2f7e55;
+  background: #e9f5ee;
+  color: #1f603d;
 }
 
 .filter-checkbox-group {

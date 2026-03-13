@@ -23,7 +23,12 @@ import {
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
-const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL" });
+const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL", depositMin: "", depositMax: "", monthlyRentMin: "", monthlyRentMax: "" });
+const DEPOSIT_FILTER_OPTIONS = [
+  ...Array.from({ length: 10 }, (_, index) => (index + 1) * 1000),
+  ...Array.from({ length: 4 }, (_, index) => (index + 2) * 10000)
+];
+const MONTHLY_RENT_FILTER_OPTIONS = [...Array.from({ length: 10 }, (_, index) => (index + 1) * 10), 110];
 
 function createMarkerIconContent(count, selected, hasHot, hasRecent) {
   return `<div class="panda-marker${selected ? " selected" : ""}">
@@ -53,13 +58,42 @@ function clampSheetDragOffset(current, deltaY) {
   return Math.min(maxDown, Math.max(-maxUp, deltaY));
 }
 
-function matchesListingFilters(listing, region, roomTypes, loanFilter) {
+function normalizeMoneyFilterValue(value) {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  return digitsOnly ? Number(digitsOnly) : null;
+}
+
+function formatMoneyFilterInput(value) {
+  const numericValue = normalizeMoneyFilterValue(value);
+  return numericValue == null ? "" : numericValue.toLocaleString("ko-KR");
+}
+
+function formatPresetAmountLabel(value, type) {
+  if (type === "deposit" && value >= 10000 && value % 10000 === 0) return `${value / 10000}억`;
+  return value.toLocaleString("ko-KR");
+}
+
+function convertManwonFilterToWon(value) {
+  const numericValue = normalizeMoneyFilterValue(value);
+  return numericValue == null ? null : numericValue * 10000;
+}
+
+function matchesListingFilters(listing, filters) {
+  const { region, roomTypes, loanFilter, depositMin, depositMax, monthlyRentMin, monthlyRentMax } = filters;
   const address = String(listing?.address ?? "").toLowerCase();
   const regionMatched = !region || address.includes(region);
   const roomMatched = !Array.isArray(roomTypes) || roomTypes.length === 0 || roomTypes.includes(listing?.roomType);
   const products = listing?.loanProducts || [];
   const loanMatched = loanFilter === "ALL" || (loanFilter === "TYPE_126" ? products.some(p => LOAN_126_PRODUCTS.has(p)) : (loanFilter === "INSURANCE_AVAILABLE" ? products.some(p => INSURANCE_AVAILABLE_PRODUCTS.has(p)) : true));
-  return regionMatched && roomMatched && loanMatched;
+  const deposit = Number(listing?.deposit ?? 0);
+  const monthlyRent = Number(listing?.monthlyRent ?? 0);
+  const depositMinValue = convertManwonFilterToWon(depositMin);
+  const depositMaxValue = convertManwonFilterToWon(depositMax);
+  const monthlyRentMinValue = convertManwonFilterToWon(monthlyRentMin);
+  const monthlyRentMaxValue = convertManwonFilterToWon(monthlyRentMax);
+  const depositMatched = (depositMinValue == null || deposit >= depositMinValue) && (depositMaxValue == null || deposit <= depositMaxValue);
+  const monthlyRentMatched = (monthlyRentMinValue == null || monthlyRent >= monthlyRentMinValue) && (monthlyRentMaxValue == null || monthlyRent <= monthlyRentMaxValue);
+  return regionMatched && roomMatched && loanMatched && depositMatched && monthlyRentMatched;
 }
 
 export default function MapListingPage() {
@@ -79,6 +113,8 @@ export default function MapListingPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState(createDefaultFilters);
   const [draftFilters, setDraftFilters] = useState(createDefaultFilters);
+  const [filterErrorMessage, setFilterErrorMessage] = useState("");
+  const [moneyFilterTargets, setMoneyFilterTargets] = useState({ deposit: "min", monthlyRent: "min" });
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isTopPhotoVisible, setIsTopPhotoVisible] = useState(true);
 
@@ -90,7 +126,7 @@ export default function MapListingPage() {
   const sheetStartYRef = useRef(0);
   const photoSwipeStartXRef = useRef(null);
 
-  const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, filters.region.trim().toLowerCase(), filters.roomTypes, filters.loanFilter)), [listings, filters]);
+  const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, { ...filters, region: filters.region.trim().toLowerCase() })), [listings, filters]);
   const groupedCoordinates = useMemo(() => {
     const grouped = new Map();
     filteredListings.filter(l => l.latitude != null && l.longitude != null).forEach(l => {
@@ -181,10 +217,26 @@ export default function MapListingPage() {
 
   const closeDetails = () => { setSelectedListingId(null); setSelectedListingDetail(null); setDetailError(""); setSheetMode("closed"); setSelectedGroupKey(null); };
   const applyFilters = () => {
+    const depositMinValue = convertManwonFilterToWon(draftFilters.depositMin);
+    const depositMaxValue = convertManwonFilterToWon(draftFilters.depositMax);
+    const monthlyRentMinValue = convertManwonFilterToWon(draftFilters.monthlyRentMin);
+    const monthlyRentMaxValue = convertManwonFilterToWon(draftFilters.monthlyRentMax);
+
+    if (depositMinValue != null && depositMaxValue != null && depositMinValue > depositMaxValue) {
+      setFilterErrorMessage("보증금 최소값은 최대값보다 클 수 없습니다.");
+      return;
+    }
+
+    if (monthlyRentMinValue != null && monthlyRentMaxValue != null && monthlyRentMinValue > monthlyRentMaxValue) {
+      setFilterErrorMessage("월세 최소값은 최대값보다 클 수 없습니다.");
+      return;
+    }
+
+    setFilterErrorMessage("");
     setFilters({ ...draftFilters, roomTypes: [...draftFilters.roomTypes] });
     setIsFilterOpen(false);
     if (mapInstanceRef.current) {
-      const first = listings.find(l => matchesListingFilters(l, draftFilters.region.trim().toLowerCase(), draftFilters.roomTypes, draftFilters.loanFilter));
+      const first = listings.find(l => matchesListingFilters(l, { ...draftFilters, region: draftFilters.region.trim().toLowerCase() }));
       if (first) mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(first.latitude, first.longitude));
     }
   };
@@ -192,6 +244,24 @@ export default function MapListingPage() {
     setDraftFilters((prev) => {
       const exists = prev.roomTypes.includes(roomType);
       return { ...prev, roomTypes: exists ? prev.roomTypes.filter(type => type !== roomType) : [...prev.roomTypes, roomType] };
+    });
+  };
+  const onDraftMoneyFilterChange = (key, value) => {
+    setFilterErrorMessage("");
+    setDraftFilters((prev) => ({ ...prev, [key]: formatMoneyFilterInput(value) }));
+  };
+  const onDraftMoneyPresetSelect = (type, value) => {
+    const key = type === "deposit"
+      ? (moneyFilterTargets.deposit === "min" ? "depositMin" : "depositMax")
+      : (moneyFilterTargets.monthlyRent === "min" ? "monthlyRentMin" : "monthlyRentMax");
+    setFilterErrorMessage("");
+    setDraftFilters((prev) => {
+      if (!value) {
+        return { ...prev, [key]: "" };
+      }
+
+      const currentValue = normalizeMoneyFilterValue(prev[key]) ?? 0;
+      return { ...prev, [key]: formatMoneyFilterInput(currentValue + value) };
     });
   };
   const showPreviousPhoto = () => setPhotoIndex((p) => (p - 1 + detailImageUrls.length) % detailImageUrls.length);
@@ -337,9 +407,58 @@ export default function MapListingPage() {
                   ))}
                 </div>
               </div>
+              <div className="filter-field">
+                <span>보증금</span>
+                <small className="filter-field-hint">단위: 만원</small>
+                <div className="filter-preset-block">
+                  <div className="filter-preset-grid">
+                    <button type="button" className="filter-preset-chip" onClick={() => onDraftMoneyPresetSelect("deposit", "")}>없음</button>
+                    {DEPOSIT_FILTER_OPTIONS.map((amount) => (
+                      <button
+                        key={`deposit-${amount}`}
+                        type="button"
+                        className="filter-preset-chip"
+                        onClick={() => onDraftMoneyPresetSelect("deposit", amount)}
+                      >
+                        {formatPresetAmountLabel(amount, "deposit")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-range-row">
+                  <input type="text" inputMode="numeric" className={moneyFilterTargets.deposit === "min" ? "active" : ""} value={draftFilters.depositMin} onFocus={() => setMoneyFilterTargets((prev) => ({ ...prev, deposit: "min" }))} onChange={e => onDraftMoneyFilterChange("depositMin", e.target.value)} placeholder="최소" />
+                  <span className="filter-range-separator">~</span>
+                  <input type="text" inputMode="numeric" className={moneyFilterTargets.deposit === "max" ? "active" : ""} value={draftFilters.depositMax} onFocus={() => setMoneyFilterTargets((prev) => ({ ...prev, deposit: "max" }))} onChange={e => onDraftMoneyFilterChange("depositMax", e.target.value)} placeholder="최대" />
+                </div>
+              </div>
+              <div className="filter-field">
+                <span>월세</span>
+                <small className="filter-field-hint">단위: 만원</small>
+                <div className="filter-preset-block">
+                  <div className="filter-preset-grid">
+                    <button type="button" className="filter-preset-chip" onClick={() => onDraftMoneyPresetSelect("monthlyRent", "")}>없음</button>
+                    {MONTHLY_RENT_FILTER_OPTIONS.map((amount) => (
+                      <button
+                        key={`rent-${amount}`}
+                        type="button"
+                        className="filter-preset-chip"
+                        onClick={() => onDraftMoneyPresetSelect("monthlyRent", amount)}
+                      >
+                        {formatPresetAmountLabel(amount, "monthlyRent")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-range-row">
+                  <input type="text" inputMode="numeric" className={moneyFilterTargets.monthlyRent === "min" ? "active" : ""} value={draftFilters.monthlyRentMin} onFocus={() => setMoneyFilterTargets((prev) => ({ ...prev, monthlyRent: "min" }))} onChange={e => onDraftMoneyFilterChange("monthlyRentMin", e.target.value)} placeholder="최소" />
+                  <span className="filter-range-separator">~</span>
+                  <input type="text" inputMode="numeric" className={moneyFilterTargets.monthlyRent === "max" ? "active" : ""} value={draftFilters.monthlyRentMax} onFocus={() => setMoneyFilterTargets((prev) => ({ ...prev, monthlyRent: "max" }))} onChange={e => onDraftMoneyFilterChange("monthlyRentMax", e.target.value)} placeholder="최대" />
+                </div>
+              </div>
               <label className="filter-field"><span>대출 타입</span><select value={draftFilters.loanFilter} onChange={e => setDraftFilters(p => ({ ...p, loanFilter: e.target.value }))}>{LOAN_FILTER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+              {filterErrorMessage && <div className="filter-error-message">{filterErrorMessage}</div>}
             </div>
-            <div className="filter-viewer-actions"><button type="button" onClick={() => setDraftFilters(createDefaultFilters())}>초기화</button><button type="button" onClick={applyFilters}>적용</button></div>
+            <div className="filter-viewer-actions"><button type="button" onClick={() => { setDraftFilters(createDefaultFilters()); setFilterErrorMessage(""); }}>초기화</button><button type="button" onClick={applyFilters}>적용</button></div>
           </section>
         </div>
       )}
