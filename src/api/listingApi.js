@@ -61,6 +61,25 @@ export function fetchListingDetail(listingId) {
   return request(`/api/v1/listings/${listingId}`);
 }
 
+export function enterListingViewerPresence(listingId, viewerSessionId) {
+  return request(`/api/v1/listings/${listingId}/viewer-presence`, {
+    method: "POST",
+    body: JSON.stringify({ viewerSessionId })
+  });
+}
+
+export function fetchListingViewerCount(listingId, viewerSessionId) {
+  const query = new URLSearchParams({ viewerSessionId }).toString();
+  return request(`/api/v1/listings/${listingId}/viewer-count?${query}`);
+}
+
+export function leaveListingViewerPresence(listingId, viewerSessionId) {
+  const query = new URLSearchParams({ viewerSessionId }).toString();
+  return request(`/api/v1/listings/${listingId}/viewer-presence?${query}`, {
+    method: "DELETE"
+  });
+}
+
 export function fetchListingEditDetail(listingId) {
   return request(`/api/v1/listings/${listingId}/edit`);
 }

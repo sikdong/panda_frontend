@@ -13,6 +13,69 @@
   2. SSE
   3. 임시 대안으로 짧은 주기 폴링
 
+## 짧은 주기 폴링이란
+- 상세보기가 열려 있는 동안 일정 주기마다 서버에 다시 요청해서 현재 조회자 수를 가져오는 방식이다.
+- 권장 주기:
+  - 10초
+  - 15초
+- 현재 프로젝트처럼 EC2 프리티어 또는 동시 사용자 수가 높지 않은 환경에서는 가장 단순하고 운영 부담이 낮다.
+
+### 프론트 기준 동작 순서
+1. 사용자가 상세보기를 연다.
+2. `POST /listings/{listingId}/viewer-presence`로 입장 등록을 한다.
+3. 즉시 한 번 `GET /listings/{listingId}/viewer-count`를 호출해 초기 count를 그린다.
+4. `setInterval`로 10초 또는 15초마다 `viewer-count`를 다시 조회한다.
+5. 사용자가 상세보기를 닫거나 다른 매물로 이동하면 `clearInterval`을 호출한다.
+6. `DELETE /listings/{listingId}/viewer-presence`로 이탈 처리한다.
+
+### 왜 이 방식이 유효한가
+- WebSocket/SSE 없이도 바로 붙일 수 있다.
+- 프론트 구조 변경이 작다.
+- 네트워크 문제나 배포 중 연결 관리가 단순하다.
+- 응답이 숫자 하나 수준이면 비용이 낮다.
+
+### 단점
+- 실시간 반영이 즉시는 아니다.
+- 폴링 주기가 15초면 최대 15초까지 지연될 수 있다.
+
+### 프론트 구현 예시
+```jsx
+useEffect(() => {
+  if (!selectedListingId) return;
+
+  let intervalId = null;
+  let cancelled = false;
+
+  const startPolling = async () => {
+    await enterListingViewerPresence(selectedListingId, viewerSessionId);
+
+    const fetchViewerCount = async () => {
+      const response = await fetchListingViewerCount(selectedListingId, viewerSessionId);
+      if (!cancelled) {
+        setCurrentViewerCount(Number(response?.viewerCount ?? 0));
+      }
+    };
+
+    await fetchViewerCount();
+    intervalId = window.setInterval(fetchViewerCount, 15000);
+  };
+
+  startPolling().catch(() => {});
+
+  return () => {
+    cancelled = true;
+    if (intervalId) window.clearInterval(intervalId);
+    leaveListingViewerPresence(selectedListingId, viewerSessionId).catch(() => {});
+  };
+}, [selectedListingId, viewerSessionId]);
+```
+
+### 프론트에서 함께 챙길 것
+- `selectedListingId`가 바뀌면 이전 폴링을 반드시 중단
+- `closeDetails()` 안에서 interval 정리
+- `beforeunload`, `pagehide`에서 leave 보조 처리
+- 서버 응답 실패 시 이전 count 유지 또는 0 처리 정책 결정
+
 ## 현재 프론트 기준 연결 지점
 - 상세보기 진입 트리거: `src/pages/MapListingPage.jsx`
 - 상세 데이터 렌더링: `src/components/Map/ListingDetailContent.jsx`
@@ -122,6 +185,7 @@ SSE는 수신 전용이라 구현은 단순하지만, 입장/이탈을 REST로 �
   - `enterListingViewerPresence(listingId, viewerSessionId)`
   - `leaveListingViewerPresence(listingId, viewerSessionId)`
   - `createListingViewerStream(listingId, viewerSessionId)` 또는 WebSocket helper
+  - 폴링 방식이면 `fetchListingViewerCount(listingId, viewerSessionId)` 추가
 
 ### 2. 세션 ID 유틸 추가
 - `src/utils`에 탭 단위 session id 유틸 추가

@@ -1,6 +1,12 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchListingDetail, fetchUnsoldListings } from "../api/listingApi";
+import {
+  enterListingViewerPresence,
+  fetchListingDetail,
+  fetchListingViewerCount,
+  fetchUnsoldListings,
+  leaveListingViewerPresence
+} from "../api/listingApi";
 import { loadNaverMapScript } from "../components/naverMapLoader";
 import ListingDetailContent from "../components/Map/ListingDetailContent";
 import {
@@ -23,6 +29,7 @@ import {
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
+const VIEWER_POLLING_INTERVAL_MS = 15000;
 const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL", depositMin: "", depositMax: "", monthlyRentMin: "", monthlyRentMax: "" });
 const DEPOSIT_FILTER_OPTIONS = [
   ...Array.from({ length: 10 }, (_, index) => (index + 1) * 1000),
@@ -78,6 +85,19 @@ function convertManwonFilterToWon(value) {
   return numericValue == null ? null : numericValue * 10000;
 }
 
+function getOrCreateViewerSessionId() {
+  const storageKey = "listingViewerSessionId";
+  const existing = window.sessionStorage.getItem(storageKey);
+  if (existing) return existing;
+
+  const nextId = typeof window.crypto?.randomUUID === "function"
+    ? window.crypto.randomUUID()
+    : `viewer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  window.sessionStorage.setItem(storageKey, nextId);
+  return nextId;
+}
+
 function matchesListingFilters(listing, filters) {
   const { region, roomTypes, loanFilter, depositMin, depositMax, monthlyRentMin, monthlyRentMax } = filters;
   const address = String(listing?.address ?? "").toLowerCase();
@@ -105,6 +125,7 @@ export default function MapListingPage() {
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
   const [selectedListingId, setSelectedListingId] = useState(null);
   const [selectedListingDetail, setSelectedListingDetail] = useState(null);
+  const [currentViewerCount, setCurrentViewerCount] = useState(0);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [sheetMode, setSheetMode] = useState("closed");
@@ -125,6 +146,12 @@ export default function MapListingPage() {
   const infoWindowRef = useRef(null);
   const sheetStartYRef = useRef(0);
   const photoSwipeStartXRef = useRef(null);
+  const viewerPollingIntervalRef = useRef(null);
+  const viewerSessionIdRef = useRef(null);
+
+  if (viewerSessionIdRef.current == null && typeof window !== "undefined") {
+    viewerSessionIdRef.current = getOrCreateViewerSessionId();
+  }
 
   const filteredListings = useMemo(() => listings.filter(l => matchesListingFilters(l, { ...filters, region: filters.region.trim().toLowerCase() })), [listings, filters]);
   const groupedCoordinates = useMemo(() => {
@@ -159,6 +186,62 @@ export default function MapListingPage() {
       catch (e) { setErrorMessage(e.message); } finally { setLoading(false); }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!selectedListingId || !viewerSessionIdRef.current) {
+      setCurrentViewerCount(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchViewerCount = async () => {
+      try {
+        const response = await fetchListingViewerCount(selectedListingId, viewerSessionIdRef.current);
+        if (!cancelled) {
+          setCurrentViewerCount(Number(response?.viewerCount ?? 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentViewerCount(0);
+        }
+      }
+    };
+
+    const startPolling = async () => {
+      try {
+        const enterResponse = await enterListingViewerPresence(selectedListingId, viewerSessionIdRef.current);
+        if (!cancelled && enterResponse?.viewerCount != null) {
+          setCurrentViewerCount(Number(enterResponse.viewerCount ?? 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentViewerCount(0);
+        }
+      }
+
+      await fetchViewerCount();
+      if (cancelled) return;
+
+      viewerPollingIntervalRef.current = window.setInterval(fetchViewerCount, VIEWER_POLLING_INTERVAL_MS);
+    };
+
+    startPolling();
+
+    return () => {
+      cancelled = true;
+      if (viewerPollingIntervalRef.current) {
+        window.clearInterval(viewerPollingIntervalRef.current);
+        viewerPollingIntervalRef.current = null;
+      }
+      leaveListingViewerPresence(selectedListingId, viewerSessionIdRef.current).catch(() => {});
+    };
+  }, [selectedListingId]);
+
+  useEffect(() => {
+    if (!selectedListingDetail || selectedListingDetail.currentViewerCount === currentViewerCount) return;
+    setSelectedListingDetail((prev) => (prev ? { ...prev, currentViewerCount } : prev));
+  }, [currentViewerCount, selectedListingDetail]);
 
   useEffect(() => {
     if (loading || errorMessage || !NAVER_MAP_CLIENT_ID) return;
@@ -215,7 +298,7 @@ export default function MapListingPage() {
     });
   }, [selectedGroupKey, groupedCoordinates]);
 
-  const closeDetails = () => { setSelectedListingId(null); setSelectedListingDetail(null); setDetailError(""); setSheetMode("closed"); setSelectedGroupKey(null); };
+  const closeDetails = () => { setSelectedListingId(null); setSelectedListingDetail(null); setCurrentViewerCount(0); setDetailError(""); setSheetMode("closed"); setSelectedGroupKey(null); };
   const applyFilters = () => {
     const depositMinValue = convertManwonFilterToWon(draftFilters.depositMin);
     const depositMaxValue = convertManwonFilterToWon(draftFilters.depositMax);

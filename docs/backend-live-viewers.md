@@ -29,6 +29,89 @@
 - WebSocket 또는 SSE 서버
 - Redis
 
+## 짧은 주기 폴링 방식으로 운영하는 경우
+- 현재 트래픽이 크지 않다면 WebSocket 없이 REST 기반으로도 충분하다.
+- 이때 백엔드는 "presence 등록/해제"와 "현재 count 조회" 두 역할만 확실히 제공하면 된다.
+
+### 백엔드 기준 동작 순서
+1. 클라이언트가 상세보기를 연다.
+2. `POST /listings/{listingId}/viewer-presence`로 세션 입장 등록
+3. 클라이언트가 10초 또는 15초마다 `GET /listings/{listingId}/viewer-count` 호출
+4. 클라이언트가 상세보기를 닫으면 `DELETE /listings/{listingId}/viewer-presence`
+5. 비정상 종료 세션은 TTL cleanup으로 정리
+
+### 필요한 API 예시
+
+#### 입장 등록
+`POST /listings/{listingId}/viewer-presence`
+
+request:
+```json
+{
+  "viewerSessionId": "uuid"
+}
+```
+
+response:
+```json
+{
+  "listingId": 123,
+  "viewerCount": 4
+}
+```
+
+#### 현재 count 조회
+`GET /listings/{listingId}/viewer-count?viewerSessionId=uuid`
+
+response:
+```json
+{
+  "listingId": 123,
+  "viewerCount": 4
+}
+```
+
+#### 이탈 등록
+`DELETE /listings/{listingId}/viewer-presence?viewerSessionId=uuid`
+
+response:
+```json
+{
+  "listingId": 123,
+  "viewerCount": 3
+}
+```
+
+### 폴링 방식에서 백엔드가 꼭 처리해야 할 것
+- 같은 `viewerSessionId` 중복 등록 방지
+- 다른 매물로 이동하면 이전 매물에서 제거
+- 일정 시간 갱신이 없는 세션 cleanup
+- count 조회 API는 최대한 가볍게 유지
+
+### TTL 권장값
+- 폴링 주기 15초 기준:
+  - presence TTL 45초 ~ 90초
+- 예:
+  - 클라이언트는 15초마다 count 조회
+  - 서버는 `lastSeen` 또는 presence TTL을 60초로 유지
+
+### 폴링 방식의 장점
+- 구현이 단순하다.
+- ELB, 프록시, keep-alive 문제를 덜 신경 써도 된다.
+- 프리티어/소규모 트래픽에 적합하다.
+
+### 폴링 방식의 단점
+- count 반영이 즉시 되지 않는다.
+- active session 갱신 정책을 분명히 정해야 한다.
+
+### active session 갱신 정책 추천
+- 가장 단순한 방법:
+  - 입장 시 presence 등록
+  - count 조회 API를 호출할 때마다 `lastSeen` 갱신
+  - 일정 시간 요청이 없으면 자동 만료
+
+이렇게 하면 별도 heartbeat API 없이도 폴링 요청 자체가 세션 생존 신호 역할을 한다.
+
 ## 데이터 모델 권장안
 
 ### Redis Key 예시
