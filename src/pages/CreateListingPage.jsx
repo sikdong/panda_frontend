@@ -128,6 +128,17 @@ function extractListingId(response) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function sumFileSize(files) {
+  return files.reduce((total, file) => total + Number(file?.size ?? 0), 0);
+}
+
+function saveUploadBenchmarkResult(result) {
+  if (typeof window === "undefined") return;
+  const key = "__PANDA_UPLOAD_BENCHMARKS__";
+  const current = Array.isArray(window[key]) ? window[key] : [];
+  window[key] = [...current, result];
+}
+
 export default function CreateListingPage() {
   const { listingId } = useParams();
   const navigate = useNavigate();
@@ -383,16 +394,36 @@ export default function CreateListingPage() {
     if (form.loanProducts.length === 0) return setStatus({ type: "error", message: "대출상품을 최소 1개 이상 선택해주세요." });
 
     setLoading(true); setStatus({ type: "idle", message: "" });
+    let sourceFiles = [];
+    const uploadBenchmark = {
+      startedAt: performance.now(),
+      mode: isEditMode ? "edit" : "create",
+      originalFileCount: 0,
+      originalBytes: 0,
+      preparedBytes: 0,
+      prepareMs: 0,
+      presignMs: 0,
+      uploadMs: 0,
+      totalMs: 0,
+      success: false,
+      errorMessage: "",
+      fileMetrics: []
+    };
     try {
-      const sourceFiles = newImageFiles.map((item) => item.file);
+      sourceFiles = newImageFiles.map((item) => item.file);
       validateImageFiles(sourceFiles);
+      uploadBenchmark.originalFileCount = sourceFiles.length;
+      uploadBenchmark.originalBytes = sumFileSize(sourceFiles);
 
       let visibleNewFiles = sourceFiles;
       if (sourceFiles.length > 0) {
+        const prepareStartedAt = performance.now();
         setStatus({ type: "idle", message: `이미지 전처리 중... (0/${sourceFiles.length})` });
         visibleNewFiles = await prepareImageFiles(sourceFiles, (done, total) => {
           setStatus({ type: "idle", message: `이미지 전처리 중... (${done}/${total})` });
         });
+        uploadBenchmark.prepareMs = performance.now() - prepareStartedAt;
+        uploadBenchmark.preparedBytes = sumFileSize(visibleNewFiles);
       }
 
       const listingPayload = { 
@@ -432,6 +463,7 @@ export default function CreateListingPage() {
         setUploadProgress({ done: 0, total: visibleNewFiles.length });
         setStatus({ type: "idle", message: `이미지 업로드 준비 중... (0/${visibleNewFiles.length})` });
 
+        const presignStartedAt = performance.now();
         const uploadTargetResponse = await requestUploadUrls(
           targetListingId,
           visibleNewFiles.map((file) => ({
@@ -440,6 +472,7 @@ export default function CreateListingPage() {
             size: file.size
           }))
         );
+        uploadBenchmark.presignMs = performance.now() - presignStartedAt;
         const uploadTargets = normalizeUploadTargets(uploadTargetResponse);
 
         if (uploadTargets.length !== visibleNewFiles.length || uploadTargets.some((item) => !item.key || !item.putUrl)) {
@@ -447,14 +480,17 @@ export default function CreateListingPage() {
         }
 
         let completedUploads = 0;
+        const uploadStartedAt = performance.now();
         uploadedKeys = await uploadFilesInBatches(
           visibleNewFiles.map((file, index) => ({ file, target: uploadTargets[index] })),
-          () => {
+          (metric) => {
             completedUploads += 1;
+            if (metric) uploadBenchmark.fileMetrics.push(metric);
             setUploadProgress({ done: completedUploads, total: visibleNewFiles.length });
             setStatus({ type: "idle", message: `이미지 업로드 중... (${completedUploads}/${visibleNewFiles.length})` });
           }
         );
+        uploadBenchmark.uploadMs = performance.now() - uploadStartedAt;
       }
 
       if (isEditMode) {
@@ -471,9 +507,50 @@ export default function CreateListingPage() {
         setStatus({ type: "success", message: "매물을 등록했습니다." }); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]); setNewImageFiles((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
         setUploadProgress({ done: 0, total: 0 });
       }
+      uploadBenchmark.success = true;
     } catch (err) {
+      uploadBenchmark.errorMessage = err.message ?? "";
       setStatus({ type: "error", message: err.message ?? (err.details?.errorType === "INPUT_ERROR" ? "입력값을 확인해주세요." : "서버 오류가 발생했습니다.") });
     } finally {
+      uploadBenchmark.totalMs = performance.now() - uploadBenchmark.startedAt;
+      if (uploadBenchmark.originalFileCount > 0) {
+        const uploadSeconds = uploadBenchmark.uploadMs > 0 ? uploadBenchmark.uploadMs / 1000 : 0;
+        const throughputMbps = uploadSeconds > 0
+          ? (uploadBenchmark.preparedBytes * 8) / uploadSeconds / 1_000_000
+          : 0;
+
+        const summary = {
+          timestamp: new Date().toISOString(),
+          mode: uploadBenchmark.mode,
+          success: uploadBenchmark.success,
+          fileCount: uploadBenchmark.originalFileCount,
+          originalMB: Number((uploadBenchmark.originalBytes / (1024 * 1024)).toFixed(2)),
+          preparedMB: Number((uploadBenchmark.preparedBytes / (1024 * 1024)).toFixed(2)),
+          prepareMs: Math.round(uploadBenchmark.prepareMs),
+          presignMs: Math.round(uploadBenchmark.presignMs),
+          uploadMs: Math.round(uploadBenchmark.uploadMs),
+          totalMs: Math.round(uploadBenchmark.totalMs),
+          uploadThroughputMbps: Number(throughputMbps.toFixed(2)),
+          errorMessage: uploadBenchmark.errorMessage
+        };
+        saveUploadBenchmarkResult({
+          ...summary,
+          files: uploadBenchmark.fileMetrics
+        });
+
+        console.groupCollapsed(`[upload-benchmark] ${summary.mode} files=${summary.fileCount} total=${summary.totalMs}ms`);
+        console.table([summary]);
+        if (uploadBenchmark.fileMetrics.length > 0) {
+          console.table(uploadBenchmark.fileMetrics.map((item) => ({
+            fileName: item.fileName,
+            fileSizeMB: Number((Number(item.fileSize ?? 0) / (1024 * 1024)).toFixed(2)),
+            attempts: item.attempts,
+            uploadMs: Math.round(Number(item.durationMs ?? 0))
+          })));
+        }
+        console.log("historyKey:", "__PANDA_UPLOAD_BENCHMARKS__", "historyCount:", window.__PANDA_UPLOAD_BENCHMARKS__?.length ?? 0);
+        console.groupEnd();
+      }
       setLoading(false);
     }
   };

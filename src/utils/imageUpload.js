@@ -5,6 +5,7 @@ const MAX_UPLOAD_RETRIES = 2;
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1920;
 const JPEG_QUALITY = 0.82;
+const MIN_COMPRESSION_CANDIDATE_BYTES = 300 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"]);
 
 export function validateImageFiles(files) {
@@ -65,6 +66,7 @@ function createResizedImageBlob(file, imageBitmap, nextWidth, nextHeight) {
 
 async function compressImageFile(file) {
   if (file.type === "image/gif") return file;
+  if (file.size < MIN_COMPRESSION_CANDIDATE_BYTES) return file;
 
   const imageBitmap = await createImageBitmap(file);
   try {
@@ -96,13 +98,18 @@ export async function prepareImageFiles(files, onProgress) {
   return preparedFiles;
 }
 
-async function uploadFileWithRetry(target, file, retriesLeft) {
+async function uploadFileWithRetry(target, file, retriesLeft, attempt = 1) {
+  const startedAt = performance.now();
   try {
     await uploadToS3(target.putUrl, file);
-    return target.key;
+    return {
+      key: target.key,
+      attempts: attempt,
+      durationMs: performance.now() - startedAt
+    };
   } catch (error) {
     if (retriesLeft <= 0) throw error;
-    return uploadFileWithRetry(target, file, retriesLeft - 1);
+    return uploadFileWithRetry(target, file, retriesLeft - 1, attempt + 1);
   }
 }
 
@@ -113,9 +120,15 @@ export async function uploadFilesInBatches(uploadItems, onProgress) {
     const batch = uploadItems.slice(index, index + MAX_UPLOAD_CONCURRENCY);
     const batchResults = await Promise.all(
       batch.map(async ({ file, target }) => {
-        const key = await uploadFileWithRetry(target, file, MAX_UPLOAD_RETRIES);
-        onProgress?.();
-        return key;
+        const result = await uploadFileWithRetry(target, file, MAX_UPLOAD_RETRIES);
+        onProgress?.({
+          key: result.key,
+          fileName: file?.name ?? "",
+          fileSize: file?.size ?? 0,
+          attempts: result.attempts,
+          durationMs: result.durationMs
+        });
+        return result.key;
       })
     );
     uploadedKeys.push(...batchResults);
