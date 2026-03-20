@@ -27,6 +27,7 @@ async function request(path, options = {}) {
     const errorBody = parsedBody ?? {};
     const message = errorBody.message ?? "Request failed.";
     const error = new Error(message);
+    error.status = response.status;
     error.details = errorBody;
     throw error;
   }
@@ -59,6 +60,17 @@ export function fetchUnsoldListings() {
 
 export function fetchListingDetail(listingId) {
   return request(`/api/v1/listings/${listingId}`);
+}
+
+export function trackListingView(listingId) {
+  return request(`/api/v1/listings/${listingId}/view`, {
+    method: "POST"
+  });
+}
+
+export function fetchRecentViewedListings(limit = 10) {
+  const query = new URLSearchParams({ limit: String(limit) }).toString();
+  return request(`/api/v1/listings/recent-viewed?${query}`);
 }
 
 export function enterListingViewerPresence(listingId, viewerSessionId) {

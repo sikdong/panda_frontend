@@ -2,10 +2,12 @@
 import { Link } from "react-router-dom";
 import {
   enterListingViewerPresence,
+  fetchRecentViewedListings,
   fetchListingDetail,
   fetchListingViewerCount,
   fetchUnsoldListings,
-  leaveListingViewerPresence
+  leaveListingViewerPresence,
+  trackListingView
 } from "../api/listingApi";
 import { loadNaverMapScript } from "../components/naverMapLoader";
 import ListingDetailContent from "../components/Map/ListingDetailContent";
@@ -30,6 +32,8 @@ import {
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
 const VIEWER_POLLING_INTERVAL_MS = 15000;
+const RECENT_VIEWED_LIMIT = 10;
+const TRACK_VIEW_DEDUP_MS = 5000;
 const createDefaultFilters = () => ({ region: "", roomTypes: [], loanFilter: "ALL", depositMin: "", depositMax: "", monthlyRentMin: "", monthlyRentMax: "" });
 const DEPOSIT_FILTER_OPTIONS = [
   ...Array.from({ length: 10 }, (_, index) => (index + 1) * 1000),
@@ -116,6 +120,15 @@ function matchesListingFilters(listing, filters) {
   return regionMatched && roomMatched && loanMatched && depositMatched && monthlyRentMatched;
 }
 
+function getRecentViewedErrorMessage(error) {
+  const status = Number(error?.status ?? 0);
+  if (status === 401 || status === 403) return "세션이 만료되었거나 쿠키가 차단되어 최근 본 매물을 불러올 수 없습니다.";
+  if (status >= 500) return "서버 문제로 최근 본 매물을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  if (status >= 400) return "최근 본 매물 요청이 올바르지 않습니다.";
+  if (error?.name === "TypeError") return "네트워크 연결을 확인해 주세요.";
+  return error?.message ?? "최근 본 매물을 불러오지 못했습니다.";
+}
+
 export default function MapListingPage() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +151,10 @@ export default function MapListingPage() {
   const [moneyFilterTargets, setMoneyFilterTargets] = useState({ deposit: "min", monthlyRent: "min" });
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isTopPhotoVisible, setIsTopPhotoVisible] = useState(true);
+  const [isRecentViewedPanelOpen, setIsRecentViewedPanelOpen] = useState(false);
+  const [recentViewedItems, setRecentViewedItems] = useState([]);
+  const [recentViewedLoading, setRecentViewedLoading] = useState(true);
+  const [recentViewedError, setRecentViewedError] = useState("");
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -148,6 +165,7 @@ export default function MapListingPage() {
   const photoSwipeStartXRef = useRef(null);
   const viewerPollingIntervalRef = useRef(null);
   const viewerSessionIdRef = useRef(null);
+  const lastTrackedListingRef = useRef({ id: null, at: 0 });
 
   if (viewerSessionIdRef.current == null && typeof window !== "undefined") {
     viewerSessionIdRef.current = getOrCreateViewerSessionId();
@@ -172,6 +190,120 @@ export default function MapListingPage() {
   }, [filteredListings]);
 
   const detailImageUrls = useMemo(() => extractImageUrls(selectedListingDetail), [selectedListingDetail]);
+  const listingById = useMemo(() => {
+    const map = new Map();
+    listings.forEach((listing) => {
+      const listingId = getListingId(listing);
+      if (listingId != null) map.set(String(listingId), listing);
+    });
+    return map;
+  }, [listings]);
+
+  const loadRecentViewed = async () => {
+    setRecentViewedLoading(true);
+    setRecentViewedError("");
+    try {
+      const response = await fetchRecentViewedListings(RECENT_VIEWED_LIMIT);
+      const items = Array.isArray(response?.items) ? response.items : (Array.isArray(response) ? response : []);
+      setRecentViewedItems(items.slice(0, RECENT_VIEWED_LIMIT));
+    } catch (error) {
+      setRecentViewedError(getRecentViewedErrorMessage(error));
+      setRecentViewedItems([]);
+    } finally {
+      setRecentViewedLoading(false);
+    }
+  };
+
+  const openListingDetailById = async (listingId) => {
+    if (listingId == null) return;
+    setSelectedListingId(listingId);
+    setDetailLoading(true);
+    setDetailError("");
+    setSheetMode(isMobileView ? "half" : "full");
+    setIsTopPhotoVisible(true);
+    try {
+      const response = await fetchListingDetail(listingId);
+      setSelectedListingDetail(response?.data ?? response);
+      setPhotoIndex(0);
+    } catch (error) {
+      setDetailError(error.message);
+    } finally {
+      setDetailLoading(false);
+    }
+
+    try {
+      const now = Date.now();
+      const lastTrackedId = lastTrackedListingRef.current.id;
+      const lastTrackedAt = lastTrackedListingRef.current.at;
+      const shouldTrack = String(lastTrackedId) !== String(listingId) || now - lastTrackedAt > TRACK_VIEW_DEDUP_MS;
+      if (!shouldTrack) return;
+
+      await trackListingView(listingId);
+      lastTrackedListingRef.current = { id: listingId, at: now };
+      await loadRecentViewed();
+    } catch {
+      // 최근 본 매물 기록 실패는 상세 보기 UX를 막지 않는다.
+    }
+  };
+
+  const openGroupSummaryView = (group, marker) => {
+    if (!group || !marker || !mapInstanceRef.current || !infoWindowRef.current) return;
+    const map = mapInstanceRef.current;
+    setSelectedGroupKey(group.key);
+    map.panTo(new naverMapsRef.current.LatLng(group.latitude, group.longitude));
+
+    const div = document.createElement("div");
+    div.className = "panda-infowindow";
+    div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><strong>${group.count}건${group.hasHotProperty ? " · 꿀매물 포함" : ""}${group.hasRecentlyRegistered ? " · NEW 포함" : ""}</strong><button id="iw-close">×</button></div><div id="iw-list" style="height:220px;overflow-y:auto"></div>`;
+    div.querySelector("#iw-close").onclick = () => {
+      infoWindowRef.current.close();
+      setSelectedGroupKey(null);
+    };
+
+    const list = div.querySelector("#iw-list");
+    group.listings.forEach((listing) => {
+      const listingId = getListingId(listing);
+      const item = document.createElement("button");
+      item.style.cssText = "width:100%;margin-top:6px;text-align:left;border:1px solid #d9e2dc;border-radius:8px;background:#ffffff;padding:8px;cursor:pointer";
+      item.innerHTML = `
+        <div style="font-weight:700; margin-bottom:4px;">${listing.address ?? "주소 정보 없음"}</div>
+        ${getRecentlyRegisteredValue(listing) ? '<div style="margin-bottom:4px;"><span class="listing-new-badge">NEW</span></div>' : ""}
+        ${getHotPropertyValue(listing) ? '<div style="margin-bottom:4px;"><span class="hot-property-badge">🍯 꿀매물</span></div>' : ""}
+        <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
+        <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
+        <div>방 구조: ${formatRoomType(listing.roomType)}</div>
+        <div>조회수: ${formatNumber(listing.viewCount)}</div>
+        <div style="margin-top:4px; color:#2a7c4f; font-weight:700;">상세 보기</div>
+      `;
+      item.onclick = () => {
+        openListingDetailById(listingId);
+      };
+      list.appendChild(item);
+    });
+
+    infoWindowRef.current.setContent(div);
+    infoWindowRef.current.open(map, marker);
+  };
+
+  const handleClickRecentViewedTitle = (item) => {
+    const listingId = getListingId(item);
+    if (listingId == null || !mapInstanceRef.current || !naverMapsRef.current) return;
+    const listingIdKey = String(listingId);
+
+    const selectedGroup = groupedCoordinates.find((group) => group.listings.some((listing) => String(getListingId(listing)) === listingIdKey));
+    if (selectedGroup) {
+      mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(selectedGroup.latitude, selectedGroup.longitude));
+      setSelectedGroupKey(selectedGroup.key);
+      infoWindowRef.current?.close();
+      return;
+    }
+
+    const listing = listingById.get(listingIdKey);
+    if (listing?.latitude != null && listing?.longitude != null) {
+      mapInstanceRef.current.panTo(new naverMapsRef.current.LatLng(listing.latitude, listing.longitude));
+      setSelectedGroupKey(null);
+    }
+  };
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -185,6 +317,10 @@ export default function MapListingPage() {
       try { const data = await fetchUnsoldListings(); setListings(Array.isArray(data) ? data : []); }
       catch (e) { setErrorMessage(e.message); } finally { setLoading(false); }
     })();
+  }, []);
+
+  useEffect(() => {
+    loadRecentViewed();
   }, []);
 
   useEffect(() => {
@@ -264,27 +400,7 @@ export default function MapListingPage() {
     markersRef.current = groupedCoordinates.map(g => {
       const marker = new nm.Marker({ map, position: new nm.LatLng(g.latitude, g.longitude), icon: { content: createMarkerIconContent(g.count, false, g.hasHotProperty, g.hasRecentlyRegistered), anchor: new nm.Point(16, 16) } });
       nm.Event.addListener(marker, "click", () => {
-        setSelectedGroupKey(g.key); map.panTo(new nm.LatLng(g.latitude, g.longitude));
-        const div = document.createElement("div"); div.className = "panda-infowindow";
-        div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><strong>${g.count}건${g.hasHotProperty ? " · 꿀매물 포함" : ""}${g.hasRecentlyRegistered ? " · NEW 포함" : ""}</strong><button id="iw-close">×</button></div><div id="iw-list" style="height:220px;overflow-y:auto"></div>`;
-        div.querySelector("#iw-close").onclick = () => { infoWindowRef.current.close(); setSelectedGroupKey(null); };
-        const list = div.querySelector("#iw-list");
-        g.listings.forEach(listing => {
-          const lId = getListingId(listing); const item = document.createElement("button"); item.style.cssText = "width:100%;margin-top:6px;text-align:left;border:1px solid #d9e2dc;border-radius:8px;background:#ffffff;padding:8px;cursor:pointer";
-          item.innerHTML = `
-        <div style="font-weight:700; margin-bottom:4px;">${listing.address ?? "주소 정보 없음"}</div>
-        ${getRecentlyRegisteredValue(listing) ? '<div style="margin-bottom:4px;"><span class="listing-new-badge">NEW</span></div>' : ""}
-        ${getHotPropertyValue(listing) ? '<div style="margin-bottom:4px;"><span class="hot-property-badge">🍯 꿀매물</span></div>' : ""}
-        <div>보증금: ${formatNumber(listing.deposit)} / 월세: ${formatNumber(listing.monthlyRent)}</div>
-        <div>대출 유형: ${formatLoanProducts(listing.loanProducts)}</div>
-        <div>방 구조: ${formatRoomType(listing.roomType)}</div>
-        <div>조회수: ${formatNumber(listing.viewCount)}</div>
-        <div style="margin-top:4px; color:#2a7c4f; font-weight:700;">상세 보기</div>
-      `;
-          item.onclick = async () => { setSelectedListingId(lId); setDetailLoading(true); setSheetMode(isMobileView ? "half" : "full"); setIsTopPhotoVisible(true); try { const res = await fetchListingDetail(lId); setSelectedListingDetail(res?.data ?? res); setPhotoIndex(0); } catch (e) { setDetailError(e.message); } finally { setDetailLoading(false); } };
-          list.appendChild(item);
-        });
-        infoWindowRef.current.setContent(div); infoWindowRef.current.open(map, marker);
+        openGroupSummaryView(g, marker);
       });
       return { key: g.key, marker };
     });
@@ -376,8 +492,65 @@ export default function MapListingPage() {
     <section className={`map-page map-only ${!isMobileView && selectedListingId ? "with-side-panel" : ""}`}>
       <div ref={mapRef} className="map-canvas" />
       <div className="map-overlay-stack top-left">
-        <div className="map-overlay-card">매물 {filteredListings.length}건</div>
-        <button type="button" className="link-button" onClick={() => { setDraftFilters({ ...filters, roomTypes: [...filters.roomTypes] }); setIsFilterOpen(true); }}>필터</button>
+        <div className="map-overlay-card map-control-fixed-size">매물 {filteredListings.length}건</div>
+        <button type="button" className="link-button map-control-fixed-size" onClick={() => { setDraftFilters({ ...filters, roomTypes: [...filters.roomTypes] }); setIsFilterOpen(true); }}>필터</button>
+        <div className="recent-viewed-toggle-row">
+          <button type="button" className="link-button map-control-fixed-size" onClick={() => setIsRecentViewedPanelOpen((prev) => !prev)}>
+            최근 본 매물
+          </button>
+          {isRecentViewedPanelOpen && (
+            <aside className="map-recent-panel">
+              <div className="map-recent-panel-head">
+                <strong>최근 본 매물</strong>
+                <button type="button" aria-label="최근 본 매물 닫기" onClick={() => setIsRecentViewedPanelOpen(false)}>×</button>
+              </div>
+              <section className="recent-viewed-card">
+                <div className="recent-viewed-head">
+                  <span>최대 {RECENT_VIEWED_LIMIT}개</span>
+                </div>
+                {recentViewedLoading && <div className="recent-viewed-empty">불러오는 중...</div>}
+                {!recentViewedLoading && recentViewedError && <div className="recent-viewed-empty">{recentViewedError}</div>}
+                {!recentViewedLoading && !recentViewedError && recentViewedItems.length === 0 && (
+                  <div className="recent-viewed-empty">최근 본 매물이 없습니다.</div>
+                )}
+                {!recentViewedLoading && !recentViewedError && recentViewedItems.length > 0 && (
+                  <div className="recent-viewed-list">
+                    {recentViewedItems.map((item, index) => {
+                      const listingId = getListingId(item);
+                      const listingName = item?.title ?? item?.name ?? item?.address ?? `매물 ${index + 1}`;
+                      return (
+                        <article key={`${listingId ?? "recent"}-${index}`} className="recent-viewed-item">
+                          <button type="button" className="recent-viewed-title" onClick={() => handleClickRecentViewedTitle(item)}>
+                            {listingName}
+                          </button>
+                          {getRecentlyRegisteredValue(item) && <span className="listing-new-badge">NEW</span>}
+                          {getHotPropertyValue(item) && <span className="hot-property-badge">🍯 꿀매물</span>}
+                          <div>보증금: {formatNumber(item?.deposit)} / 월세: {formatNumber(item?.monthlyRent)}</div>
+                          <div>대출 유형: {formatLoanProducts(item?.loanProducts)}</div>
+                          <div>방 구조: {formatRoomType(item?.roomType)}</div>
+                          <div>조회수: {formatNumber(item?.viewCount)}</div>
+                          <button
+                            type="button"
+                            className="recent-viewed-open-detail"
+                            onClick={() => openListingDetailById(listingId)}
+                            disabled={listingId == null}
+                          >
+                            상세 보기
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+                {!recentViewedLoading && recentViewedError && (
+                  <button type="button" className="recent-viewed-retry" onClick={loadRecentViewed}>
+                    다시 시도
+                  </button>
+                )}
+              </section>
+            </aside>
+          )}
+        </div>
       </div>
 
       {!detailLoading && selectedListingId && detailImageUrls.length > 0 && isTopPhotoVisible && (
