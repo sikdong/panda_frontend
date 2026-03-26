@@ -94,8 +94,7 @@ function matchesLoanFilter(products, loanFilter) {
   if (loanFilter === "ALL") return true;
   if (loanFilter === "TYPE_126") {
     const has126Except = products.some((product) => LOAN_126_EXCEPT_LH_SH_PRODUCTS.has(product));
-    const hasLhSh = products.some((product) => LOAN_LH_SH_PRODUCTS.has(product));
-    return has126Except && !hasLhSh;
+    return has126Except;
   }
   if (loanFilter === "TYPE_LH_SH") {
     return products.some((product) => LOAN_LH_SH_PRODUCTS.has(product));
