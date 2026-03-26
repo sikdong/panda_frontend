@@ -31,14 +31,13 @@ export const ROOM_TYPE_OPTIONS = [
 
 export const LOAN_FILTER_OPTIONS = [
   { value: "ALL", label: "전체" },
-  { value: "TYPE_126", label: "126% 매물 (HUG 버팀목, LH, SH, 서울시 전세보증금, 서울시 신혼부부, 일반 전세대출, 카카오 대출, 토스 대출, 케이뱅크 대출)" },
+  { value: "TYPE_126", label: "126% 매물 (HUG 버팀목, 서울시 전세보증금, 서울시 신혼부부, 일반 전세대출, 카카오 대출, 토스 대출, 케이뱅크 대출)" },
+  { value: "TYPE_LH_SH", label: "LH/SH" },
   { value: "INSURANCE_AVAILABLE", label: "보증보험가입가능 (현금, HF 버팀목)" }
 ];
 
-export const LOAN_126_PRODUCTS = new Set([
+export const LOAN_126_EXCEPT_LH_SH_PRODUCTS = new Set([
   "HUG_YOUTH",
-  "LH",
-  "SH",
   "SEOUL_RENT_DEPOSIT",
   "SEOUL_NEWLY_MARRIED",
   "GENERAL_JEONSE",
@@ -46,6 +45,8 @@ export const LOAN_126_PRODUCTS = new Set([
   "TOSS_BANK",
   "K_BANK"
 ]);
+
+export const LOAN_LH_SH_PRODUCTS = new Set(["LH", "SH"]);
 
 export const INSURANCE_AVAILABLE_PRODUCTS = new Set(["CASH", "HF_YOUTH"]);
 

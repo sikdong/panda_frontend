@@ -13,7 +13,8 @@ import { loadNaverMapScript } from "../components/naverMapLoader";
 import ListingDetailContent from "../components/Map/ListingDetailContent";
 import {
   COORDINATE_GROUP_DECIMALS,
-  LOAN_126_PRODUCTS,
+  LOAN_126_EXCEPT_LH_SH_PRODUCTS,
+  LOAN_LH_SH_PRODUCTS,
   INSURANCE_AVAILABLE_PRODUCTS,
   ROOM_TYPE_OPTIONS,
   LOAN_FILTER_OPTIONS,
@@ -89,6 +90,22 @@ function convertManwonFilterToWon(value) {
   return numericValue == null ? null : numericValue * 10000;
 }
 
+function matchesLoanFilter(products, loanFilter) {
+  if (loanFilter === "ALL") return true;
+  if (loanFilter === "TYPE_126") {
+    const has126Except = products.some((product) => LOAN_126_EXCEPT_LH_SH_PRODUCTS.has(product));
+    const hasLhSh = products.some((product) => LOAN_LH_SH_PRODUCTS.has(product));
+    return has126Except && !hasLhSh;
+  }
+  if (loanFilter === "TYPE_LH_SH") {
+    return products.some((product) => LOAN_LH_SH_PRODUCTS.has(product));
+  }
+  if (loanFilter === "INSURANCE_AVAILABLE") {
+    return products.some((product) => INSURANCE_AVAILABLE_PRODUCTS.has(product));
+  }
+  return true;
+}
+
 function getOrCreateViewerSessionId() {
   const storageKey = "listingViewerSessionId";
   const existing = window.sessionStorage.getItem(storageKey);
@@ -108,7 +125,7 @@ function matchesListingFilters(listing, filters) {
   const regionMatched = !region || address.includes(region);
   const roomMatched = !Array.isArray(roomTypes) || roomTypes.length === 0 || roomTypes.includes(listing?.roomType);
   const products = listing?.loanProducts || [];
-  const loanMatched = loanFilter === "ALL" || (loanFilter === "TYPE_126" ? products.some(p => LOAN_126_PRODUCTS.has(p)) : (loanFilter === "INSURANCE_AVAILABLE" ? products.some(p => INSURANCE_AVAILABLE_PRODUCTS.has(p)) : true));
+  const loanMatched = matchesLoanFilter(products, loanFilter);
   const deposit = Number(listing?.deposit ?? 0);
   const monthlyRent = Number(listing?.monthlyRent ?? 0);
   const depositMinValue = convertManwonFilterToWon(depositMin);
