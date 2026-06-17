@@ -4,6 +4,7 @@ import { useDaumPostcodePopup } from "react-daum-postcode";
 import { 
   createListing, 
   fetchListingEditDetail, 
+  requestUploadUrls,
   updateListing, 
   fetchBuildingTitles, 
   fetchBuildingExclusivity 
@@ -14,6 +15,12 @@ import {
   normalizeDateValue,
   formatDateString,
 } from "../utils/listingUtils";
+import {
+  normalizeUploadTargets,
+  prepareImageFiles,
+  uploadFilesInBatches,
+  validateImageFiles
+} from "../utils/imageUpload";
 import BuildingLedgerFields from "../components/ListingForm/BuildingLedgerFields";
 import ImagePreviewList from "../components/ListingForm/ImagePreviewList";
 
@@ -35,23 +42,23 @@ const DEFAULT_FORM = {
   address: "",
   hotProperty: false,
   note: "",
+  description: "",
   parking: "AVAILABLE",
   elevator: "YES",
   pet: "AVAILABLE",
   contractType: "JEONSE",
   roomType: "ONE_ROOM",
   loanProducts: ["HF_YOUTH"],
-  moveInOption: "NEGOTIABLE",
+  moveInType: "NEGOTIABLE",
   moveInDate: "",
   deposit: "",
   monthlyRent: "",
   // 건축물대장 필드 수정
   exclusivityArea: "",
-  useAprbDe: "",
+  useAprDay: "",
   totalFloors: "",
   currentFloor: "", // 해당층 추가
   parkingCount: "",
-  parkingAvailable: "AVAILABLE",
   // 추가 필드
   maintenanceFee: "",
   loanStatus: "NONE",
@@ -66,6 +73,14 @@ function getImageUrl(item) {
   return "";
 }
 
+function parseOptionalNumber(value, { allowDecimal = false } = {}) {
+  const normalized = String(value ?? "").replace(/,/g, "").trim();
+  if (!normalized) return null;
+
+  const parsed = allowDecimal ? Number(normalized) : Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toFormModel(detail) {
   if (!detail || typeof detail !== "object") return DEFAULT_FORM;
   const parsedLoanProducts = Array.isArray(detail.loanProducts) && detail.loanProducts.length > 0
@@ -77,17 +92,17 @@ function toFormModel(detail) {
     ...detail,
     hotProperty: Boolean(detail.hotProperty),
     loanProducts: parsedLoanProducts,
-    moveInOption: detail.moveInType ?? detail.moveInOption ?? DEFAULT_FORM.moveInOption,
+    moveInType: detail.moveInType ?? DEFAULT_FORM.moveInType,
     moveInDate: normalizeDateValue(detail.moveInDate),
     deposit: formatMoneyInput(detail.deposit),
     monthlyRent: formatMoneyInput(detail.monthlyRent),
     // 건축물대장 정보 매핑
     exclusivityArea: detail.exclusivityArea ?? "",
-    useAprbDe: formatDateString(detail.useAprbDe) ?? "",
+    useAprDay: formatDateString(detail.useAprDay) ?? "",
     totalFloors: detail.totalFloors ?? "",
     currentFloor: detail.currentFloor ?? "",
     parkingCount: detail.parkingCount ?? "",
-    parkingAvailable: detail.parkingAvailable ?? DEFAULT_FORM.parkingAvailable,
+    parking: detail.parking ?? DEFAULT_FORM.parking,
     // 추가 필드 매핑
     maintenanceFee: formatMoneyInput(detail.maintenanceFee),
     loanStatus: detail.loanStatus ?? DEFAULT_FORM.loanStatus,
@@ -106,6 +121,24 @@ function toExistingImages(detail) {
     .filter((item) => Boolean(item.url));
 }
 
+function extractListingId(response) {
+  const rawData = response?.data ?? response;
+  const candidate = rawData?.id ?? rawData?.listingId ?? response?.id ?? response?.listingId;
+  const parsed = Number(candidate);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function sumFileSize(files) {
+  return files.reduce((total, file) => total + Number(file?.size ?? 0), 0);
+}
+
+function saveUploadBenchmarkResult(result) {
+  if (typeof window === "undefined") return;
+  const key = "__PANDA_UPLOAD_BENCHMARKS__";
+  const current = Array.isArray(window[key]) ? window[key] : [];
+  window[key] = [...current, result];
+}
+
 export default function CreateListingPage() {
   const { listingId } = useParams();
   const navigate = useNavigate();
@@ -120,9 +153,11 @@ export default function CreateListingPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
   const [viewerImageUrl, setViewerImageUrl] = useState("");
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   
   const [showAddressDetailModal, setShowAddressDetailModal] = useState(false);
   const [tempBaseAddress, setTempBaseAddress] = useState("");
+  const [manualBuildingName, setManualBuildingName] = useState("");
   const [localDetail, setLocalDetail] = useState("");
   const [buildingOptions, setBuildingOptions] = useState([]);
   const [selectedBuildingPk, setSelectedBuildingPk] = useState("");
@@ -141,6 +176,7 @@ export default function CreateListingPage() {
     if (!isEditMode) {
       setInitialLoading(false); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]);
       setNewImageFiles((prev) => { prev.forEach((item) => URL.revokeObjectURL(item.previewUrl)); return []; });
+      setUploadProgress({ done: 0, total: 0 });
       setStatus({ type: "idle", message: "" });
       return;
     }
@@ -172,16 +208,16 @@ export default function CreateListingPage() {
       const nextForm = {
         ...prev,
         [name]: value,
-        ...(name === "moveInOption" && value === "IMMEDIATE" ? { moveInDate: "" } : {})
+        ...(name === "moveInType" && value === "IMMEDIATE" ? { moveInDate: "" } : {})
       };
 
       // 주차가능대수가 0보다 크면 '가능', 0이면 '불가'로 자동 변경
       if (name === "parkingCount") {
         const count = Number(value) || 0;
         if (count > 0) {
-          nextForm.parkingAvailable = "AVAILABLE";
+          nextForm.parking = "AVAILABLE";
         } else {
-          nextForm.parkingAvailable = "UNAVAILABLE";
+          nextForm.parking = "UNAVAILABLE";
         }
       }
 
@@ -197,6 +233,7 @@ export default function CreateListingPage() {
     }
     
     setTempBaseAddress(fullAddress);
+    setManualBuildingName("");
     setLocalDetail("");
     setShowAddressDetailModal(true);
     setBuildingOptions([]);
@@ -230,7 +267,6 @@ export default function CreateListingPage() {
           items = Array.isArray(resData.items.item) ? resData.items.item : [resData.items.item];
         }
         
-        console.log("Fetched Building List:", items);
         setBuildingOptions(items);
 
         if (items.length === 1) {
@@ -239,10 +275,10 @@ export default function CreateListingPage() {
           setSelectedBuildingPk(target.mgmBldrgstPk || target.dongNm);
           setForm(prev => ({
             ...prev,
-            useAprbDe: formatDateString(target.useAprDay) || "",
+            useAprDay: formatDateString(target.useAprDay) || "",
             totalFloors: target.grndFlrCnt || "",
             parkingCount: target.parkingCount || "",
-            parkingAvailable: target.parkingAvailable ? "AVAILABLE" : "UNAVAILABLE"
+            parking: target.parking ? "AVAILABLE" : "UNAVAILABLE"
           }));
           setStatus({ type: "success", message: "건축물 정보를 자동으로 입력했습니다." });
         } else if (items.length > 1) {
@@ -262,34 +298,33 @@ export default function CreateListingPage() {
     setSelectedBuildingPk(pk);
     if (!pk) return;
 
-    console.log("Searching for PK/Name:", pk);
-    console.log("In Options:", buildingOptions);
 
     // mgmBldrgstPk 또는 dongNm으로 매칭 시도
     const target = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === pk);
-    console.log("Selected building info (Target):", target);
 
     if (target) {
       setForm(prev => ({
         ...prev,
-        useAprbDe: formatDateString(target.useAprDay) || "",
+        useAprDay: formatDateString(target.useAprDay) || "",
         totalFloors: target.grndFlrCnt || "",
         parkingCount: target.parkingCount || "",
-        parkingAvailable: target.parkingAvailable ? "AVAILABLE" : "UNAVAILABLE"
+        parking: target.parking ? "AVAILABLE" : "UNAVAILABLE"
       }));
     }
   };
 
   const onConfirmDetailAddress = async () => {
-    const finalAddress = `${tempBaseAddress} ${localDetail.trim()}`.trim();
+    const normalizedManualBuildingName = manualBuildingName.trim();
+    const targetBuilding = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === selectedBuildingPk);
+    const selectedBuildingName = targetBuilding?.dongNm?.trim() || "";
+    const resolvedBuildingName = selectedBuildingName || normalizedManualBuildingName;
+    const finalAddress = [tempBaseAddress, resolvedBuildingName, localDetail.trim()].filter(Boolean).join(" ");
     setForm((prev) => ({ ...prev, address: finalAddress }));
     setShowAddressDetailModal(false);
 
     // 상세 주소 확정 시 전유부 조회 시도
     if (addressCodes) {
       try {
-        const targetBuilding = buildingOptions.find(b => (b.mgmBldrgstPk || b.dongNm) === selectedBuildingPk);
-        
         // 상세 주소에서 '호' 추출 시도 (예: 202호 -> 202)
         const hoMatch = localDetail.match(/(\d+)\s*호/);
         const hoNm = hoMatch ? hoMatch[1] : localDetail.trim(); // 추출 실패 시 입력값 전체 사용
@@ -297,19 +332,16 @@ export default function CreateListingPage() {
         setStatus({ type: "idle", message: "전유부 정보 조회 중..." });
         const response = await fetchBuildingExclusivity({
           ...addressCodes,
-          dongNm: targetBuilding?.dongNm || "",
+          dongNm: resolvedBuildingName,
           hoNm: hoNm
         });
 
         const resData = response?.data ?? response;
-        console.log("Exclusivity Response:", resData);
 
         // 제공해주신 데이터 구조: items.item[0].area 매핑
         const rawItem = resData?.items?.item;
         const targetItem = Array.isArray(rawItem) ? rawItem[0] : rawItem;
         
-        console.log("Target Exclusivity Item:", targetItem);
-
         const areaValue = targetItem?.area || resData?.exclusivityArea || resData?.area;
         const floorValue = targetItem?.flrNo;
         
@@ -358,43 +390,169 @@ export default function CreateListingPage() {
     e.preventDefault();
     if (!form.address.trim()) return setStatus({ type: "error", message: "주소를 입력해주세요." });
     if (!isValidDate) return setStatus({ type: "error", message: "입주 가능일 형식을 확인해주세요." });
-    if (form.moveInOption === "FIXED" && !form.moveInDate) return setStatus({ type: "error", message: "고정 선택 시 입주 가능일이 필요합니다." });
+    if (form.moveInType === "FIXED" && !form.moveInDate) return setStatus({ type: "error", message: "고정 선택 시 입주 가능일이 필요합니다." });
     if (form.loanProducts.length === 0) return setStatus({ type: "error", message: "대출상품을 최소 1개 이상 선택해주세요." });
 
     setLoading(true); setStatus({ type: "idle", message: "" });
+    let sourceFiles = [];
+    const uploadBenchmark = {
+      startedAt: performance.now(),
+      mode: isEditMode ? "edit" : "create",
+      originalFileCount: 0,
+      originalBytes: 0,
+      preparedBytes: 0,
+      prepareMs: 0,
+      presignMs: 0,
+      uploadMs: 0,
+      totalMs: 0,
+      success: false,
+      errorMessage: "",
+      fileMetrics: []
+    };
     try {
+      sourceFiles = newImageFiles.map((item) => item.file);
+      validateImageFiles(sourceFiles);
+      uploadBenchmark.originalFileCount = sourceFiles.length;
+      uploadBenchmark.originalBytes = sumFileSize(sourceFiles);
+
+      let visibleNewFiles = sourceFiles;
+      if (sourceFiles.length > 0) {
+        const prepareStartedAt = performance.now();
+        setStatus({ type: "idle", message: `이미지 전처리 중... (0/${sourceFiles.length})` });
+        visibleNewFiles = await prepareImageFiles(sourceFiles, (done, total) => {
+          setStatus({ type: "idle", message: `이미지 전처리 중... (${done}/${total})` });
+        });
+        uploadBenchmark.prepareMs = performance.now() - prepareStartedAt;
+        uploadBenchmark.preparedBytes = sumFileSize(visibleNewFiles);
+      }
+
       const listingPayload = { 
         ...form, 
-        moveInType: form.moveInOption, 
         hotProperty: Boolean(form.hotProperty), 
         address: form.address.trim(), 
         note: form.note.trim(), 
-        moveInDate: form.moveInDate ? form.moveInDate.replaceAll("-", "") : null, 
+        description: form.description.trim(),
+        moveInDate: form.moveInDate || null, 
         deposit: parseMoneyValue(form.deposit), 
-        monthlyRent: parseMoneyValue(form.monthlyRent) 
+        monthlyRent: parseMoneyValue(form.monthlyRent),
+        exclusivityArea: parseOptionalNumber(form.exclusivityArea, { allowDecimal: true }),
+        totalFloors: parseOptionalNumber(form.totalFloors),
+        currentFloor: parseOptionalNumber(form.currentFloor),
+        parkingCount: parseOptionalNumber(form.parkingCount),
+        maintenanceFee: parseOptionalNumber(form.maintenanceFee)
       };
 
+      let targetListingId = isEditMode ? Number(listingId) : null;
+      if (isEditMode && (!Number.isInteger(targetListingId) || targetListingId <= 0)) {
+        throw new Error("유효한 매물 ID를 확인하지 못했습니다.");
+      }
+
+      if (!isEditMode && visibleNewFiles.length > 0) {
+        const createResponse = await createListing({ ...listingPayload, imagePaths: [] });
+        targetListingId = extractListingId(createResponse);
+        if (!targetListingId) {
+          throw new Error("생성된 매물 ID를 확인하지 못했습니다.");
+        }
+      }
+
+      let uploadedKeys = [];
+      if (visibleNewFiles.length > 0) {
+        if (!targetListingId) {
+          throw new Error("이미지 업로드 대상 매물 ID가 없습니다.");
+        }
+        setUploadProgress({ done: 0, total: visibleNewFiles.length });
+        setStatus({ type: "idle", message: `이미지 업로드 준비 중... (0/${visibleNewFiles.length})` });
+
+        const presignStartedAt = performance.now();
+        const uploadTargetResponse = await requestUploadUrls(
+          targetListingId,
+          visibleNewFiles.map((file) => ({
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            size: file.size
+          }))
+        );
+        uploadBenchmark.presignMs = performance.now() - presignStartedAt;
+        const uploadTargets = normalizeUploadTargets(uploadTargetResponse);
+
+        if (uploadTargets.length !== visibleNewFiles.length || uploadTargets.some((item) => !item.key || !item.putUrl)) {
+          throw new Error("업로드 URL 발급 응답이 올바르지 않습니다.");
+        }
+
+        let completedUploads = 0;
+        const uploadStartedAt = performance.now();
+        uploadedKeys = await uploadFilesInBatches(
+          visibleNewFiles.map((file, index) => ({ file, target: uploadTargets[index] })),
+          (metric) => {
+            completedUploads += 1;
+            if (metric) uploadBenchmark.fileMetrics.push(metric);
+            setUploadProgress({ done: completedUploads, total: visibleNewFiles.length });
+            setStatus({ type: "idle", message: `이미지 업로드 중... (${completedUploads}/${visibleNewFiles.length})` });
+          }
+        );
+        uploadBenchmark.uploadMs = performance.now() - uploadStartedAt;
+      }
+
       if (isEditMode) {
-        const visibleNewFiles = newImageFiles.map((i) => i.file);
-        const retainedPaths = serverImagePaths.filter((p) => p != null);
-        listingPayload.imagePaths = serverImagePaths;
-        if (retainedPaths.length > 0 || visibleNewFiles.length > 0) {
-          const fd = new FormData();
-          fd.append("listing", new Blob([JSON.stringify(listingPayload)], { type: "application/json" }));
-          visibleNewFiles.forEach((f) => fd.append("images", f));
-          await updateListing(listingId, fd);
-        } else await updateListing(listingId, listingPayload);
+        listingPayload.imagePaths = [...serverImagePaths.filter((path) => path != null), ...uploadedKeys];
+        await updateListing(targetListingId, listingPayload);
         navigate("/admin/listings", { replace: true });
       } else {
-        if (newImageFiles.length > 0) {
-          const fd = new FormData();
-          fd.append("listing", new Blob([JSON.stringify(listingPayload)], { type: "application/json" }));
-          newImageFiles.forEach((i) => fd.append("images", i.file));
-          await createListing(fd);
-        } else await createListing(listingPayload);
+        if (targetListingId) {
+          await updateListing(targetListingId, { imagePaths: uploadedKeys });
+        } else {
+          listingPayload.imagePaths = [];
+          await createListing(listingPayload);
+        }
         setStatus({ type: "success", message: "매물을 등록했습니다." }); setForm(DEFAULT_FORM); setExistingImages([]); setServerImagePaths([]); setNewImageFiles((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
+        setUploadProgress({ done: 0, total: 0 });
       }
-    } catch (err) { setStatus({ type: "error", message: err.details?.errorType === "INPUT_ERROR" ? "입력값을 확인해주세요." : "서버 오류가 발생했습니다." }); } finally { setLoading(false); }
+      uploadBenchmark.success = true;
+    } catch (err) {
+      uploadBenchmark.errorMessage = err.message ?? "";
+      setStatus({ type: "error", message: err.message ?? (err.details?.errorType === "INPUT_ERROR" ? "입력값을 확인해주세요." : "서버 오류가 발생했습니다.") });
+    } finally {
+      uploadBenchmark.totalMs = performance.now() - uploadBenchmark.startedAt;
+      if (uploadBenchmark.originalFileCount > 0) {
+        const uploadSeconds = uploadBenchmark.uploadMs > 0 ? uploadBenchmark.uploadMs / 1000 : 0;
+        const throughputMbps = uploadSeconds > 0
+          ? (uploadBenchmark.preparedBytes * 8) / uploadSeconds / 1_000_000
+          : 0;
+
+        const summary = {
+          timestamp: new Date().toISOString(),
+          mode: uploadBenchmark.mode,
+          success: uploadBenchmark.success,
+          fileCount: uploadBenchmark.originalFileCount,
+          originalMB: Number((uploadBenchmark.originalBytes / (1024 * 1024)).toFixed(2)),
+          preparedMB: Number((uploadBenchmark.preparedBytes / (1024 * 1024)).toFixed(2)),
+          prepareMs: Math.round(uploadBenchmark.prepareMs),
+          presignMs: Math.round(uploadBenchmark.presignMs),
+          uploadMs: Math.round(uploadBenchmark.uploadMs),
+          totalMs: Math.round(uploadBenchmark.totalMs),
+          uploadThroughputMbps: Number(throughputMbps.toFixed(2)),
+          errorMessage: uploadBenchmark.errorMessage
+        };
+        saveUploadBenchmarkResult({
+          ...summary,
+          files: uploadBenchmark.fileMetrics
+        });
+
+        console.groupCollapsed(`[upload-benchmark] ${summary.mode} files=${summary.fileCount} total=${summary.totalMs}ms`);
+        console.table([summary]);
+        if (uploadBenchmark.fileMetrics.length > 0) {
+          console.table(uploadBenchmark.fileMetrics.map((item) => ({
+            fileName: item.fileName,
+            fileSizeMB: Number((Number(item.fileSize ?? 0) / (1024 * 1024)).toFixed(2)),
+            attempts: item.attempts,
+            uploadMs: Math.round(Number(item.durationMs ?? 0))
+          })));
+        }
+        console.log("historyKey:", "__PANDA_UPLOAD_BENCHMARKS__", "historyCount:", window.__PANDA_UPLOAD_BENCHMARKS__?.length ?? 0);
+        console.groupEnd();
+      }
+      setLoading(false);
+    }
   };
 
   return (
@@ -441,8 +599,8 @@ export default function CreateListingPage() {
           </fieldset>
 
           <div style={{ display: "grid", gridColumn: "1 / -1", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <label>입주 옵션 <select name="moveInOption" value={form.moveInOption} onChange={onChange}><option value="NEGOTIABLE">협의필요</option><option value="FIXED">지정날짜 </option><option value="IMMEDIATE">공실(즉시입주)</option></select></label>
-            {form.moveInOption !== "IMMEDIATE" && <label>입주 가능일 <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} /></label>}
+            <label>입주 옵션 <select name="moveInType" value={form.moveInType} onChange={onChange}><option value="NEGOTIABLE">협의필요</option><option value="FIXED">지정날짜 </option><option value="IMMEDIATE">공실(즉시입주)</option></select></label>
+            {form.moveInType !== "IMMEDIATE" && <label>입주 가능일 <input type="date" name="moveInDate" value={form.moveInDate} onChange={onChange} /></label>}
           </div>
 
           <label>보증금 <input name="deposit" type="text" inputMode="numeric" value={form.deposit} onChange={onMoneyChange} required /></label>
@@ -455,6 +613,18 @@ export default function CreateListingPage() {
             <input type="file" accept="image/*" multiple onChange={onImageFilesChange} />
             <ImagePreviewList title="기존 이미지" images={existingImages} onRemove={removeExistingImage} onOpenViewer={setViewerImageUrl} />
             <ImagePreviewList title="새 이미지" images={newImageFiles} onRemove={removeNewImage} onOpenViewer={setViewerImageUrl} />
+          </label>
+
+          <label style={{ gridColumn: "1 / -1" }}>
+            메모
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={onChange}
+              placeholder="관리자용 메모"
+              rows={8}
+              style={{ minHeight: "220px", fontSize: "16px", lineHeight: 1.6, padding: "12px" }}
+            />
           </label>
 
           <button type="submit" disabled={loading}>{loading ? (isEditMode ? "수정 중.." : "등록 중..") : (isEditMode ? "매물 수정하기" : "매물 등록하기")}</button>
@@ -471,6 +641,7 @@ export default function CreateListingPage() {
       )}
 
       {status.type !== "idle" && <p className={`status ${status.type}`}>{status.message}</p>}
+      {loading && uploadProgress.total > 0 && <p className="status">이미지 업로드 진행률: {uploadProgress.done}/{uploadProgress.total}</p>}
 
       {showAddressDetailModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", padding: 16 }}>
@@ -500,13 +671,26 @@ export default function CreateListingPage() {
               </div>
             )}
 
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>상세 주소 (동, 호수 등)</label>
+            {buildingOptions.length === 0 && status.message !== "건물(동) 목록 조회 중..." && (
+              <>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>동명 (수동 입력)</label>
+                <input
+                  type="text"
+                  value={manualBuildingName}
+                  onChange={(e) => setManualBuildingName(e.target.value)}
+                  placeholder="예: 101동"
+                  style={{ width: "100%", minHeight: "44px", padding: "0 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "16px", marginBottom: "16px" }}
+                />
+              </>
+            )}
+
+            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>상세 주소 (호수 등)</label>
             <input
               ref={detailInputRef}
               type="text"
               value={localDetail}
               onChange={(e) => setLocalDetail(e.target.value)}
-              placeholder="예: 101동 202호"
+              placeholder="예: 202호"
               onKeyDown={(e) => { if (e.key === "Enter") onConfirmDetailAddress(); }}
               style={{ width: "100%", minHeight: "44px", padding: "0 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "16px", marginBottom: "20px" }}
             />

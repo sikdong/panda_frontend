@@ -13,9 +13,9 @@ export default function AdminListingItem({ listing, busy, onToggleCompleted, onD
   const isHot = getHotPropertyValue(listing);
 
   return (
-    <li style={{ display: "grid", gap: 8, borderBottom: "1px solid #e6ece8", paddingBottom: 10 }}>
+    <li style={{ display: "grid", gap: 8, borderBottom: "2px solid #b4c0b9", paddingBottom: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <span>{listing.address ?? "주소 정보 없음"}</span>
+        <span style={{ fontWeight: 700 }}>{listing.address ?? "주소 정보 없음"}</span>
         {isHot && <span className="hot-property-badge admin-hot-property-badge">꿀매물</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -48,6 +48,11 @@ export default function AdminListingItem({ listing, busy, onToggleCompleted, onD
           </button>
         </div>
       </div>
+      {listing.description?.trim() && (
+        <div style={{ whiteSpace: "pre-line", color: "#3b4540", lineHeight: 1.5, fontWeight: 700 }}>
+          {listing.description}
+        </div>
+      )}
     </li>
   );
 }

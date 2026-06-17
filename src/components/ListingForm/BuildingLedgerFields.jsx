@@ -10,7 +10,7 @@ export default function BuildingLedgerFields({ form, onChange, onMoneyChange }) 
       </label>
       <label>
         사용승인일
-        <input name="useAprbDe" type="date" value={form.useAprbDe || ""} onChange={onChange} />
+        <input name="useAprDay" type="date" value={form.useAprDay || ""} onChange={onChange} />
       </label>
       <label>
         총층
@@ -26,7 +26,7 @@ export default function BuildingLedgerFields({ form, onChange, onMoneyChange }) 
       </label>
       <label>
         주차가능여부
-        <select name="parkingAvailable" value={form.parkingAvailable || "AVAILABLE"} onChange={onChange}>
+        <select name="parking" value={form.parking || "AVAILABLE"} onChange={onChange}>
           <option value="AVAILABLE">가능</option>
           <option value="UNAVAILABLE">불가</option>
           <option value="CHECK_REQUIRED">확인 필요</option>

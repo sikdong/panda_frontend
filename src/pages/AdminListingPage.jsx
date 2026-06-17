@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { deleteListing, fetchListingSummaries, updateListingSoldStatus } from "../api/listingApi";
+import { deleteListing, fetchAdminListings, updateListingSoldStatus } from "../api/listingApi";
 import {
   getListingId,
   getSoldValue,
@@ -21,26 +21,32 @@ export default function AdminListingPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await fetchListingSummaries();
+        const data = await fetchAdminListings();
         setListings(data ?? []);
-      } catch (err) { setErrorMessage(err.message ?? "목록 조회 실패"); }
-      finally { setLoading(false); }
+      } catch (err) {
+        setErrorMessage(err.message ?? "목록 조회 실패");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
-  const setBusy = (id, busy) => setBusyIds(prev => busy ? [...new Set([...prev, id])] : prev.filter(i => i !== id));
+  const setBusy = (id, busy) => setBusyIds((prev) => (busy ? [...new Set([...prev, id])] : prev.filter((i) => i !== id)));
 
   const onToggleCompleted = async (listing) => {
     const id = getListingId(listing);
     if (!id) return alert("매물 ID 없음");
     const nextValue = !getSoldValue(listing);
     setBusy(id, true);
-    setListings(prev => prev.map(item => getListingId(item) === id ? { ...item, isSold: nextValue } : item));
-    try { await updateListingSoldStatus(id, nextValue); }
-    catch (err) {
-      setListings(prev => prev.map(item => getListingId(item) === id ? { ...item, isSold: !nextValue } : item));
+    setListings((prev) => prev.map((item) => (getListingId(item) === id ? { ...item, isSold: nextValue } : item)));
+    try {
+      await updateListingSoldStatus(id, nextValue);
+    } catch (err) {
+      setListings((prev) => prev.map((item) => (getListingId(item) === id ? { ...item, isSold: !nextValue } : item)));
       alert(err.message ?? "상태 변경 실패");
-    } finally { setBusy(id, false); }
+    } finally {
+      setBusy(id, false);
+    }
   };
 
   const onDelete = async (listing) => {
@@ -49,14 +55,17 @@ export default function AdminListingPage() {
     setBusy(id, true);
     try {
       await deleteListing(id);
-      setListings(prev => prev.filter(i => getListingId(i) !== id));
-    } catch (err) { alert(err.message ?? "삭제 실패"); }
-    finally { setBusy(id, false); }
+      setListings((prev) => prev.filter((i) => getListingId(i) !== id));
+    } catch (err) {
+      alert(err.message ?? "삭제 실패");
+    } finally {
+      setBusy(id, false);
+    }
   };
 
   const sortedFilteredListings = useMemo(() => {
     const query = normalizeString(addressQuery);
-    const filtered = query ? listings.filter(l => normalizeString(l.address).includes(query)) : listings;
+    const filtered = query ? listings.filter((l) => normalizeString(l.address).includes(query)) : listings;
     return [...filtered].sort((a, b) => {
       if (sortType === "VIEW_COUNT") return Number(b.viewCount ?? 0) - Number(a.viewCount ?? 0);
       const ts = getLatestTimestamp(b) - getLatestTimestamp(a);
@@ -68,13 +77,16 @@ export default function AdminListingPage() {
     <section className="panel">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>관리자 매물 목록</h2>
-        <Link to="/" className="link-button">지도로 가기</Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to="/admin/dau" className="link-button">DAU 보기</Link>
+          <Link to="/" className="link-button">지도로 가기</Link>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <input
           type="text"
           value={addressQuery}
-          onChange={e => setAddressQuery(e.target.value)}
+          onChange={(e) => setAddressQuery(e.target.value)}
           placeholder="주소 검색"
           style={{ flex: 1, minHeight: 40, border: "1px solid #d7deda", borderRadius: 8, padding: "0 10px" }}
         />

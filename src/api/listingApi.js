@@ -3,6 +3,7 @@
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
     headers: isFormData
       ? { ...(options.headers ?? {}) }
       : {
@@ -26,6 +27,7 @@ async function request(path, options = {}) {
     const errorBody = parsedBody ?? {};
     const message = errorBody.message ?? "Request failed.";
     const error = new Error(message);
+    error.status = response.status;
     error.details = errorBody;
     throw error;
   }
@@ -40,12 +42,16 @@ async function request(path, options = {}) {
 export function createListing(payload) {
   return request("/api/v1/listings", {
     method: "POST",
-    body: payload instanceof FormData ? payload : JSON.stringify(payload)
+    body: JSON.stringify(payload)
   });
 }
 
 export function fetchListingSummaries() {
   return request("/api/v1/listings/summaries");
+}
+
+export function fetchAdminListings() {
+  return request("/api/v1/listings/admin");
 }
 
 export function fetchUnsoldListings() {
@@ -54,6 +60,36 @@ export function fetchUnsoldListings() {
 
 export function fetchListingDetail(listingId) {
   return request(`/api/v1/listings/${listingId}`);
+}
+
+export function trackListingView(listingId) {
+  return request(`/api/v1/listings/${listingId}/view`, {
+    method: "POST"
+  });
+}
+
+export function fetchRecentViewedListings(limit = 10) {
+  const query = new URLSearchParams({ limit: String(limit) }).toString();
+  return request(`/api/v1/listings/recent-viewed?${query}`);
+}
+
+export function enterListingViewerPresence(listingId, viewerSessionId) {
+  return request(`/api/v1/listings/${listingId}/viewer-presence`, {
+    method: "POST",
+    body: JSON.stringify({ viewerSessionId })
+  });
+}
+
+export function fetchListingViewerCount(listingId, viewerSessionId) {
+  const query = new URLSearchParams({ viewerSessionId }).toString();
+  return request(`/api/v1/listings/${listingId}/viewer-count?${query}`);
+}
+
+export function leaveListingViewerPresence(listingId, viewerSessionId) {
+  const query = new URLSearchParams({ viewerSessionId }).toString();
+  return request(`/api/v1/listings/${listingId}/viewer-presence?${query}`, {
+    method: "DELETE"
+  });
 }
 
 export function fetchListingEditDetail(listingId) {
@@ -78,8 +114,53 @@ export function deleteListing(listingId) {
 export function updateListing(listingId, payload) {
   return request(`/api/v1/listings/${listingId}`, {
     method: "PATCH",
-    body: payload instanceof FormData ? payload : JSON.stringify(payload)
+    body: JSON.stringify(payload)
   });
+}
+
+export function requestUploadUrls(listingId, files) {
+  return request("/api/v1/images/presigned-urls", {
+    method: "POST",
+    body: JSON.stringify({
+      listingId,
+      files: files.map((file) => ({
+        fileName: file.fileName,
+        originalFileName: file.fileName,
+        contentType: file.contentType,
+        fileType: file.contentType,
+        size: file.size,
+        contentLength: file.size
+      }))
+    })
+  });
+}
+
+export async function uploadToS3(putUrl, file, { timeoutMs = 30000 } = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream"
+      },
+      body: file,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "S3 업로드에 실패했습니다.");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("이미지 업로드 시간이 초과되었습니다.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export function fetchBuildingLedger(params) {
@@ -95,4 +176,9 @@ export function fetchBuildingTitles(params) {
 export function fetchBuildingExclusivity(params) {
   const query = new URLSearchParams(params).toString();
   return request(`/api/v1/listings/building-ledger/exclusivity?${query}`);
+}
+
+export function fetchAdminDauMetrics(params) {
+  const query = new URLSearchParams(params).toString();
+  return request(`/api/v1/admin/metrics/dau?${query}`);
 }

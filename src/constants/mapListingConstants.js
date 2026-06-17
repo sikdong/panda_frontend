@@ -31,14 +31,13 @@ export const ROOM_TYPE_OPTIONS = [
 
 export const LOAN_FILTER_OPTIONS = [
   { value: "ALL", label: "전체" },
-  { value: "TYPE_126", label: "126% 매물 (HUG 버팀목, LH, SH, 서울시 전세보증금, 서울시 신혼부부, 일반 전세대출, 카카오 대출, 토스 대출, 케이뱅크 대출)" },
+  { value: "TYPE_126", label: "126% 매물 (HUG 버팀목, 서울시 전세보증금, 서울시 신혼부부, 일반 전세대출, 카카오 대출, 토스 대출, 케이뱅크 대출)" },
+  { value: "TYPE_LH_SH", label: "LH/SH" },
   { value: "INSURANCE_AVAILABLE", label: "보증보험가입가능 (현금, HF 버팀목)" }
 ];
 
-export const LOAN_126_PRODUCTS = new Set([
+export const LOAN_126_EXCEPT_LH_SH_PRODUCTS = new Set([
   "HUG_YOUTH",
-  "LH",
-  "SH",
   "SEOUL_RENT_DEPOSIT",
   "SEOUL_NEWLY_MARRIED",
   "GENERAL_JEONSE",
@@ -46,6 +45,8 @@ export const LOAN_126_PRODUCTS = new Set([
   "TOSS_BANK",
   "K_BANK"
 ]);
+
+export const LOAN_LH_SH_PRODUCTS = new Set(["LH", "SH"]);
 
 export const INSURANCE_AVAILABLE_PRODUCTS = new Set(["CASH", "HF_YOUTH"]);
 
@@ -65,6 +66,14 @@ export const DETAIL_KEY_LABELS = {
   moveInDate: "입주 가능일",
   deposit: "보증금",
   monthlyRent: "월세",
+  exclusivityArea: "전용면적",
+  useAprDay: "사용승인일",
+  totalFloors: "총층수",
+  currentFloor: "해당층",
+  parkingCount: "주차가능대수",
+  maintenanceFee: "관리비",
+  loanStatus: "융자여부",
+  illegalBuildingStatus: "위반건축물 여부",
   createdAt: "등록일시",
   updatedAt: "수정일시"
 };
@@ -90,6 +99,16 @@ export const CONTRACT_TYPE_LABELS = {
   JEONSE: "전세",
   SEMI_JEONSE: "반전세",
   MONTHLY_RENT: "월세"
+};
+
+export const LOAN_STATUS_LABELS = {
+  NONE: "없음",
+  BELOW_30: "시세 융자금 30% 미만"
+};
+
+export const ILLEGAL_BUILDING_STATUS_LABELS = {
+  NO: "X",
+  YES: "O"
 };
 
 export const DETAIL_PRIORITY_KEYS = ["address", "isHotProperty", "deposit", "monthlyRent", "viewCount", "roomType"];
