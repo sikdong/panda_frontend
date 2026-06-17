@@ -37,7 +37,7 @@ export default function AdminListingItem({ listing, busy, onToggleCompleted, onD
           >
             {isSold ? "거래완료 해제" : "거래완료"}
           </button>
-          <Link to={`/lss/${listingId}`} className="link-button" style={{ minHeight: 34, padding: "0 10px", fontWeight: 400 }}>수정</Link>
+          <Link to={`/sublss/${listingId}`} className="link-button" style={{ minHeight: 34, padding: "0 10px", fontWeight: 400 }}>수정</Link>
           <button
             type="button"
             onClick={() => onDelete(listing)}

@@ -156,7 +156,7 @@ export default function MapListingPage() {
       <div ref={mapRef} className="map-canvas" />
       <div className="map-overlay-stack top-left">
         <div className="map-overlay-card">매물 {filteredListings.length}건</div>
-        <Link to="/lss" className="link-button">등록</Link>
+        <Link to="/sublss" className="link-button">등록</Link>
         <button type="button" className="link-button" onClick={() => { setDraftFilters(filters); setIsFilterOpen(true); }}>필터</button>
       </div>
 
