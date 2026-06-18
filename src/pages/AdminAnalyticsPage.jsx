@@ -81,7 +81,7 @@ export default function AdminAnalyticsPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>관리자 사용자 통계</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          <Link to="/admin/listings" className="link-button">매물 관리자</Link>
+          <Link to="/panda/admin/listings" className="link-button">매물 관리자</Link>
           <Link to="/" className="link-button">지도로 가기</Link>
         </div>
       </div>

@@ -16,7 +16,7 @@ export default function App() {
         <Route path="/" element={<MapListingPage />} />
         <Route path="/sublss" element={<CreateListingPage />} />
         <Route path="/sublss/:listingId" element={<CreateListingPage />} />
-        <Route path="/admin/listings" element={<AdminListingPage />} />
+        <Route path="/panda/admin/listings" element={<AdminListingPage />} />
         <Route path="/admin/dau" element={<AdminAnalyticsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

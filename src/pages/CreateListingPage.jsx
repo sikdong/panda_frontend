@@ -496,7 +496,7 @@ export default function CreateListingPage() {
       if (isEditMode) {
         listingPayload.imagePaths = [...serverImagePaths.filter((path) => path != null), ...uploadedKeys];
         await updateListing(targetListingId, listingPayload);
-        navigate("/admin/listings", { replace: true });
+        navigate("/panda/admin/listings", { replace: true });
       } else {
         if (targetListingId) {
           await updateListing(targetListingId, { imagePaths: uploadedKeys });
@@ -560,7 +560,7 @@ export default function CreateListingPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "16px" }}>
         <h2>{isEditMode ? "매물 수정" : "매물 등록"}</h2>
         <div style={{ display: "flex", gap: "8px" }}>
-          <Link to="/admin/listings" className="link-button">관리자 목록</Link>
+          <Link to="/panda/admin/listings" className="link-button">관리자 목록</Link>
           <Link to="/" className="link-button">목록으로 가기</Link>
         </div>
       </div>
