@@ -1,4 +1,5 @@
 ﻿import { Navigate, Route, Routes } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import AdminListingPage from "./pages/AdminListingPage";
 import CreateListingPage from "./pages/CreateListingPage";
@@ -6,12 +7,14 @@ import MapListingPage from "./pages/MapListingPage";
 import "./styles/layout.css";
 
 export default function App() {
+  const location = useLocation();
+  const isMapPage = location.pathname === "/";
   return (
     <div className="app-shell">
-      <div className="app-title">
+      {!isMapPage && <div className="app-title">
         <img src="/panda_title.png" alt="판다 부동산 로고" />
         <h4>매물 조회</h4>
-      </div>
+      </div>}
       <Routes>
         <Route path="/" element={<MapListingPage />} />
         <Route path="/sublss" element={<CreateListingPage />} />

@@ -140,6 +140,118 @@
   color: var(--panda-danger-fg);
 }
 
+.map-access-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(circle at 10% 15%, rgba(89, 166, 119, 0.2) 0, transparent 28%),
+    radial-gradient(circle at 88% 88%, rgba(47, 127, 84, 0.16) 0, transparent 32%),
+    var(--panda-paper);
+}
+
+.map-access-card {
+  width: min(100%, 520px);
+  padding: 36px 38px;
+  background: var(--panda-surface);
+  border: 1px solid #dbe7de;
+  border-radius: 20px;
+  box-shadow: 0 22px 48px rgba(24, 63, 39, 0.12);
+}
+
+.map-access-brand {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--panda-bamboo);
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(47, 127, 84, 0.24);
+}
+
+.map-access-eyebrow {
+  margin: 0 0 9px;
+  color: var(--panda-bamboo);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.map-access-card h1 {
+  margin: 0;
+  color: #1f2421;
+  font-size: clamp(27px, 5vw, 35px);
+  line-height: 1.3;
+  letter-spacing: -0.045em;
+}
+
+.map-access-description {
+  margin: 16px 0 28px;
+  color: #66736b;
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.map-access-card form {
+  display: grid;
+  gap: 10px;
+}
+
+.map-access-card label {
+  color: #1d1e1a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.map-access-card input {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid #cfd9d3;
+  border-radius: 10px;
+  background: #fbfdfb;
+  padding: 0 15px;
+  color: #1d1e1a;
+  font-size: 15px;
+}
+
+.map-access-card input:focus {
+  outline: 2px solid rgba(47, 127, 84, 0.2);
+  outline-offset: 1px;
+  border-color: var(--panda-bamboo);
+}
+
+.map-access-card button {
+  min-height: 52px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panda-bamboo);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 14px rgba(47, 127, 84, 0.18);
+}
+
+.map-access-card button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  box-shadow: none;
+}
+
+.map-access-error {
+  margin: 0;
+  color: #a1261d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .map-page.map-only {
   position: relative;
   width: 100%;

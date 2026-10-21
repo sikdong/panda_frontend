@@ -1,15 +1,18 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  checkMapAccess,
   enterListingViewerPresence,
   fetchRecentViewedListings,
   fetchListingDetail,
   fetchListingViewerCount,
   fetchUnsoldListings,
   leaveListingViewerPresence,
+  requestMapAccess,
   trackListingView
 } from "../api/listingApi";
 import { loadNaverMapScript } from "../components/naverMapLoader";
+import MapAccessGate from "../components/Map/MapAccessGate";
 import ListingDetailContent from "../components/Map/ListingDetailContent";
 import {
   COORDINATE_GROUP_DECIMALS,
@@ -146,6 +149,7 @@ function getRecentViewedErrorMessage(error) {
 }
 
 export default function MapListingPage() {
+  const [mapAccessStatus, setMapAccessStatus] = useState("checking");
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -329,18 +333,26 @@ export default function MapListingPage() {
   }, []);
 
   useEffect(() => {
+    checkMapAccess()
+      .then((authorized) => setMapAccessStatus(authorized ? "authorized" : "locked"))
+      .catch(() => setMapAccessStatus("locked"));
+  }, []);
+
+  useEffect(() => {
+    if (mapAccessStatus !== "authorized") return;
     (async () => {
       try { const data = await fetchUnsoldListings(); setListings(Array.isArray(data) ? data : []); }
       catch (e) { setErrorMessage(e.message); } finally { setLoading(false); }
     })();
-  }, []);
+  }, [mapAccessStatus]);
 
   useEffect(() => {
+    if (mapAccessStatus !== "authorized") return;
     loadRecentViewed();
-  }, []);
+  }, [mapAccessStatus]);
 
   useEffect(() => {
-    if (!selectedListingId || !viewerSessionIdRef.current) {
+    if (mapAccessStatus !== "authorized" || !selectedListingId || !viewerSessionIdRef.current) {
       setCurrentViewerCount(0);
       return;
     }
@@ -388,7 +400,7 @@ export default function MapListingPage() {
       }
       leaveListingViewerPresence(selectedListingId, viewerSessionIdRef.current).catch(() => {});
     };
-  }, [selectedListingId]);
+  }, [mapAccessStatus, selectedListingId]);
 
   useEffect(() => {
     if (!selectedListingDetail || selectedListingDetail.currentViewerCount === currentViewerCount) return;
@@ -396,7 +408,7 @@ export default function MapListingPage() {
   }, [currentViewerCount, selectedListingDetail]);
 
   useEffect(() => {
-    if (loading || errorMessage || !NAVER_MAP_CLIENT_ID) return;
+    if (mapAccessStatus !== "authorized" || loading || errorMessage || !NAVER_MAP_CLIENT_ID) return;
     (async () => {
       try {
         const nm = await loadNaverMapScript(NAVER_MAP_CLIENT_ID);
@@ -407,7 +419,7 @@ export default function MapListingPage() {
         setMapReady(true);
       } catch (e) { setErrorMessage(e.message); }
     })();
-  }, [loading, errorMessage]);
+  }, [mapAccessStatus, loading, errorMessage]);
 
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
@@ -501,6 +513,12 @@ export default function MapListingPage() {
     photoSwipeStartXRef.current = null;
   };
 
+  const handleMapAccess = async (password) => {
+    await requestMapAccess(password);
+    setMapAccessStatus("authorized");
+  };
+
+  if (mapAccessStatus !== "authorized") return <MapAccessGate checking={mapAccessStatus === "checking"} onSubmit={handleMapAccess} />;
   if (loading) return <section className="map-page map-only"><div className="map-overlay-card">로딩 중...</div></section>;
   if (errorMessage) return <section className="map-page map-only"><div className="map-overlay-card error">오류: {errorMessage}</div></section>;
 

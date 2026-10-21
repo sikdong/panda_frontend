@@ -418,9 +418,9 @@ export default function CreateListingPage() {
       let visibleNewFiles = sourceFiles;
       if (sourceFiles.length > 0) {
         const prepareStartedAt = performance.now();
-        setStatus({ type: "idle", message: `이미지 전처리 중... (0/${sourceFiles.length})` });
+        setStatus({ type: "idle", message: `워터마크 적용 및 이미지 최적화 중... (0/${sourceFiles.length})` });
         visibleNewFiles = await prepareImageFiles(sourceFiles, (done, total) => {
-          setStatus({ type: "idle", message: `이미지 전처리 중... (${done}/${total})` });
+          setStatus({ type: "idle", message: `워터마크 적용 및 이미지 최적화 중... (${done}/${total})` });
         });
         uploadBenchmark.prepareMs = performance.now() - prepareStartedAt;
         uploadBenchmark.preparedBytes = sumFileSize(visibleNewFiles);
@@ -611,6 +611,7 @@ export default function CreateListingPage() {
           <label style={{ gridColumn: "1 / -1" }}>
             이미지 파일 (여러 개 선택 가능)
             <input type="file" accept="image/*" multiple onChange={onImageFilesChange} />
+            <small style={{ display: "block", marginTop: 6, color: "#4b5a52" }}>새로 추가한 사진에는 업로드 시 중앙에 반투명 판다 부동산 로고 워터마크가 자동 적용됩니다.</small>
             <ImagePreviewList title="기존 이미지" images={existingImages} onRemove={removeExistingImage} onOpenViewer={setViewerImageUrl} />
             <ImagePreviewList title="새 이미지" images={newImageFiles} onRemove={removeNewImage} onOpenViewer={setViewerImageUrl} />
           </label>

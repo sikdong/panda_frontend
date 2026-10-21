@@ -1,13 +1,17 @@
 ﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:9111";
 
+const MAP_ACCESS_TOKEN_KEY = "mapListingAccessToken";
+
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
+  const mapAccessToken = window.sessionStorage.getItem(MAP_ACCESS_TOKEN_KEY);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
     headers: isFormData
-      ? { ...(options.headers ?? {}) }
+      ? { ...(mapAccessToken ? { "X-Map-Access-Token": mapAccessToken } : {}), ...(options.headers ?? {}) }
       : {
           "Content-Type": "application/json",
+          ...(mapAccessToken ? { "X-Map-Access-Token": mapAccessToken } : {}),
           ...(options.headers ?? {})
         },
     ...options
@@ -37,6 +41,20 @@ async function request(path, options = {}) {
   }
 
   return parsedBody;
+}
+
+export async function requestMapAccess(password) {
+  const response = await request("/api/v1/map-access", {
+    method: "POST",
+    body: JSON.stringify({ password })
+  });
+  window.sessionStorage.setItem(MAP_ACCESS_TOKEN_KEY, response.token);
+  return response;
+}
+
+export async function checkMapAccess() {
+  const response = await request("/api/v1/map-access/session");
+  return Boolean(response?.authorized);
 }
 
 export function createListing(payload) {
