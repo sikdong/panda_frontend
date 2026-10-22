@@ -73,26 +73,26 @@ export function fetchAdminListings() {
 }
 
 export function fetchUnsoldListings() {
-  return request("/api/v1/listings/unsold");
+  return request("/api/v1/map/listings/unsold");
 }
 
 export function fetchListingDetail(listingId) {
-  return request(`/api/v1/listings/${listingId}`);
+  return request(`/api/v1/map/listings/${listingId}`);
 }
 
 export function trackListingView(listingId) {
-  return request(`/api/v1/listings/${listingId}/view`, {
+  return request(`/api/v1/map/listings/${listingId}/view`, {
     method: "POST"
   });
 }
 
 export function fetchRecentViewedListings(limit = 10) {
   const query = new URLSearchParams({ limit: String(limit) }).toString();
-  return request(`/api/v1/listings/recent-viewed?${query}`);
+  return request(`/api/v1/map/listings/recent-viewed?${query}`);
 }
 
 export function enterListingViewerPresence(listingId, viewerSessionId) {
-  return request(`/api/v1/listings/${listingId}/viewer-presence`, {
+  return request(`/api/v1/map/listings/${listingId}/viewer-presence`, {
     method: "POST",
     body: JSON.stringify({ viewerSessionId })
   });
@@ -100,12 +100,12 @@ export function enterListingViewerPresence(listingId, viewerSessionId) {
 
 export function fetchListingViewerCount(listingId, viewerSessionId) {
   const query = new URLSearchParams({ viewerSessionId }).toString();
-  return request(`/api/v1/listings/${listingId}/viewer-count?${query}`);
+  return request(`/api/v1/map/listings/${listingId}/viewer-count?${query}`);
 }
 
 export function leaveListingViewerPresence(listingId, viewerSessionId) {
   const query = new URLSearchParams({ viewerSessionId }).toString();
-  return request(`/api/v1/listings/${listingId}/viewer-presence?${query}`, {
+  return request(`/api/v1/map/listings/${listingId}/viewer-presence?${query}`, {
     method: "DELETE"
   });
 }
